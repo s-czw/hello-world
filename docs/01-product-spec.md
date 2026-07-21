@@ -3,7 +3,7 @@
 **Document:** 01-product-spec.md
 **Author:** Product Engineer
 **Date:** 20 July 2026
-**Status:** v1.2 — owner-directed re-baseline for **multi-tenant SaaS** (D-022): multi-org tenancy in MVP, scope cuts to fund it (D4 ships as its table floor; D5, Ctrl+K search, second template, and the stretch ladder are cut). Base: v1.1 — PMO review (PD-1…PD-42) applied.
+**Status:** v1.3 — re-baselined to **internal-first, single-org** (D-028, after external-advisor review). Multi-tenant SaaS reverted to a gated commercialization phase; the MVP is the single-org core + portfolio layer, sequenced into milestones (M1 ≈ 2 weeks) in `docs/05` (the delivery plan of record). Cuts retained from v1.2: bar timeline → schedule-table floor, D5, Ctrl+K search, second template, stretch ladder. Base: v1.1 — PMO review (PD-1…PD-42) applied.
 **Audience:** Tech Lead (architecture spec follows this doc), Designer (UI/UX spec follows this doc), Project Director (delivery plan follows this doc)
 
 ---
@@ -141,12 +141,11 @@ Conventions: stories are `As a <persona>, I want <thing>, so that <why>`. Accept
 
 ### 4.1 Module: Auth & org setup
 
-**A1. Organization creation (multi-tenant, D-022).**
-As an admin, I want to create an organization on the deployment, so that setup → usable takes minutes — and so that the same deployment can host more organizations later (our org is tenant #1).
-- AC: On a fresh DB, visiting the app shows a "Create your organization" flow: org name + admin name/email/password. Completing it creates the org (with a unique slug), a default "General" team, and logs the admin in as role=admin of that org.
-- AC: Further org creation is gated by `SIGNUP_MODE` (`closed` — instance operator only, the pilot default · `invite` · `open` — self-serve, for a future commercial launch). Roles are per-org: admin of org A is a plain member (or nothing) in org B.
-- AC: A user belonging to multiple orgs gets an **org switcher** in the sidebar; all navigation (My Tasks, projects, portfolios, search-less nav, notifications) is scoped to the active org. Users in exactly one org never see the switcher.
-- AC: Cross-tenant isolation is absolute: no object, count, name, or notification from another org is ever visible, regardless of URL guessing (enforced by RLS — arch §2.3).
+**A1. First-run organization setup (single-org, D-028).**
+As an admin, I want the first run on a fresh install to set up the organization, so that deployment → usable takes minutes.
+- AC: On a fresh DB, the app shows a "Create your organization" flow: org name + admin name/email/password. Completing it creates the single org, a default "General" team, and logs the admin in as role=admin.
+- AC: Once the org exists, this flow is unreachable; the login page shows instead. **One organization per install** — no `SIGNUP_MODE`, no second org, no org switcher (multi-org is the commercialization phase, arch §10).
+- AC (seam, not a feature): every tenant-owned row carries `organization_id` and all access goes through the org-filter helper (arch §2.3) — so multi-tenancy is later an activation, not a rewrite. Postgres RLS is deferred to commercialization.
 
 **A2. Email/password auth.**
 As any user, I want to sign in with email + password, so that access is controlled.
@@ -267,7 +266,7 @@ Deferred to Phase 1 unchanged in design (the D3 composer retargeted at a portfol
 
 **E1. Global navigation.**
 - AC: Persistent left sidebar: My Tasks (with badge), Notifications (with unread badge), Portfolios (list), Teams → their projects (collapsible), + New buttons. Recently visited projects float to a "Recent" cluster at top.
-- AC: Top bar: "+ New" (task/project/portfolio), user menu (profile: name, password change; admin sees Members & Invites). Global search is cut from MVP (D-022, see E2); the sidebar org switcher (A1) appears only for multi-org users.
+- AC: Top bar: "+ New" (task/project/portfolio), user menu (profile: name, password change; admin sees Members & Invites). Global search is cut from the MVP (see E2). No org switcher (single-org, D-028).
 
 **E2. Global search — CUT from MVP (D-022 funding; moves to Phase 1 as previously specced).**
 For the pilot, navigation is the sidebar (teams → projects, portfolios, Recent cluster) plus browser find-in-page — adequate at pilot scale (≤ a few dozen projects). When it returns in Phase 1 it is unchanged from the PD-28/PD-5 ruling: plain Ctrl+K typeahead over titles/names via `ILIKE`/`pg_trgm` (org-scoped under RLS), no command palette, tsvector later with descriptions/comments.
@@ -298,7 +297,8 @@ Locked roadmap phases: **Phase 1** dashboards/reporting → **Phase 2** Entra ID
 | Full-text search (descriptions/comments), filters/saved views | Phase 1 | MVP search = ILIKE/trigram on titles/names only |
 | Rich text (descriptions, comments, status bodies) | Phase 1 | MVP = plain text + auto-linked URLs everywhere (PD-8) |
 | Timeline drag-editing (bar move/resize), zoom presets | Phase 1 | MVP timeline = read-only bars, fixed month zoom (PD-2) |
-| CSV/JSON export UI (general) | Phase 1 | Stretch ladder **cancelled by D-022** — the PD-11 CSV stretch and PD-4 SSE stretch both move to Phase 1; Sprint-3 slack is consumed by the tenancy re-architecture |
+| CSV/JSON export UI (general); SSE realtime | Post-MVP | Stretch ladder cancelled; realtime is refetch-on-focus in the MVP (arch §4.4, D-028) |
+| Multi-tenancy & all SaaS machinery (RLS, per-org quotas, PgBouncer, worker split, S3, `/metrics`, multi-org UI, SSO) | **Commercialization phase** (gated, D-028) | Reverted from the day-1 SaaS plan; design retained as the blueprint (arch §10) |
 | Lark sign-in (OAuth, toggleable via `AUTH_LARK_ENABLED`) | Week 7 — first post-MVP item (D-020) | Provider framework + toggles + identity table ship inside the MVP; only the Lark provider itself is deferred; supports Lark and Feishu tenants via configurable base URL |
 | Entra ID SSO (OIDC/SAML), SCIM deprovisioning | Phase 2 | MVP = email/password + invites only; multi-provider framework ready (Lark proves the seam in week 7) |
 | Teams app/tabs/bot, Outlook add-in, email notifications, calendar sync | Phase 2 | Benchmark M365 specifics are the blueprint |
@@ -311,7 +311,8 @@ Locked roadmap phases: **Phase 1** dashboards/reporting → **Phase 2** Entra ID
 | Calendar view, timeline view *within* a project | Phase 1–3 (as demanded) | List + board only in MVP |
 | Mobile apps / full mobile web | Not scheduled | Desktop-first internal tool |
 | Time tracking, budgets, proofing, approvals, docs/whiteboards/chat | Not scheduled | Other tools exist; we don't chase all-in-one (see ClickUp cautionary tale in benchmark) |
-| Multi-org tenancy, i18n, public API & webhooks | Not scheduled (API likely Phase 2/3 alongside integrations) | Single org, English UI |
+| Multi-org tenancy | **Commercialization phase** (D-028) | Single org in the MVP; seam kept (arch §10) |
+| i18n, public API & webhooks | Not scheduled (API likely alongside integrations) | English UI |
 
 ---
 
@@ -369,11 +370,11 @@ Pilot: 4 weeks post-launch (weeks 7–10), whole team invited, ≥ 2 real progra
 
 ## Appendix A — MVP scope summary (one screen, for sprint planning)
 
-**In (6 weeks, v1.2 / D-022):** multi-tenant org model (org creation gated by `SIGNUP_MODE`, org switcher, RLS isolation — arch §2.3/§10) · email/password auth + multi-provider framework with per-provider toggles (Lark week 7) · invites · member admin · teams · projects (create/edit/archive/overview; sample project seeded; no template picker) · sections · list view (inline edit on 5 fixed columns, drag, quick-add, section grouping only) · board view (drag, same data) · My Tasks (Overdue-first + status-nudge block) · tasks (assignee, due date, priority, plain-text description) · subtasks (1 level) · comments + @mentions + activity stream (plain text) · attachments (25 MB, S3-compatible storage, per-org quota) · portfolios (create, add projects, manual order) · portfolio roll-up table with status chips + 7-day staleness + progress · project status updates (4 colors, copy-previous, history) · **portfolio schedule view (date-ordered table + mini date-bars — the D4 floor)** · global nav (sidebar + Recent; no search) · in-app notifications (6 event types).
+**In (single-org, v1.3 / D-028) — sequenced into milestones M1–M3 in `docs/05`:** single-org first-run setup + email/password auth (multi-provider `IdentityProvider` seam; Lark/Entra deferred) · simple invites · member admin · teams · projects (create/edit/archive/overview; sample project seeded; no template picker) · sections · list view (inline edit on 5 fixed columns, drag, quick-add, section grouping only) · task side-peek · My Tasks (Overdue-first + status-nudge block) · tasks (assignee, due date, priority, plain-text description) · subtasks (1 level) · comments + @mentions + activity stream (plain text) · attachments (25 MB, **local disk volume**) · board view (drag, same data) · portfolios (create, add projects, manual order) · portfolio roll-up table with status chips + 7-day staleness + progress · project status updates (4 colors, copy-previous, history) · **portfolio schedule view (date-ordered table + mini date-bars — the D4 floor)** · global nav (sidebar + Recent; no search) · in-app notifications (6 event types). **≈2-week M1 = the single-org core loop** (auth + projects/sections/tasks + list view + task peek + My Tasks); portfolio layer + board = M2; collaboration + notifications + polish = M3.
 
-**Stretch: none — the ladder is cancelled (D-022).** Sprint-3 slack is reserved for tenancy re-architecture integration and hardening.
+**Stretch: none.** No multi-tenancy/RLS/PgBouncer/worker-split/S3/metrics — all reverted to the gated commercialization phase (arch §10, D-028).
 
-**Out:** everything in §5 (now incl. bar timeline, D5, search, templates, CSV, SSE).
+**Out:** everything in §5 (incl. bar timeline, D5, search, templates, CSV, SSE) **plus** all SaaS machinery (deferred to commercialization).
 
 ## Appendix B — Open questions (owner → resolve by)
 

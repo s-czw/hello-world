@@ -1,6 +1,6 @@
 # Architecture — Self-Hosted Program & Project Management Tool
 
-**Author:** Tech Lead · **Date:** 21 July 2026 · **Status:** v3.1 — owner-directed stack change: **API is Java / Spring Boot** (D-026), replacing NestJS. Web stays Next.js; the shared-zod contract becomes an OpenAPI-generated one; data layer is jOOQ (Apache-2.0, not Hibernate/LGPL); worker is the same Spring jar under a `worker` profile. Retains v3.0 (multi-tenant SaaS, RLS, S3, PgBouncer, scale tiers §10 — D-022…D-024) and v2.1 (Traefik/Valkey, multi-provider auth, permissive-license policy — D-018…D-021).
+**Author:** Tech Lead · **Date:** 21 July 2026 · **Status:** v3.2 — re-baselined to **internal-first, single-org** after the external-advisor review (D-028). The multi-tenant SaaS machinery (RLS, per-org quotas, PgBouncer, worker-container split, S3, `/metrics`, multi-org UI — D-022…D-024) is **deferred to a gated commercialization phase**; the MVP ships single-org with an `organization_id` column + app-layer filter (the cheap seam). Retains v3.1 (Java/Spring Boot API, jOOQ, OpenAPI contract — D-026) and v2.1 (Traefik/Valkey, multi-provider auth, permissive-license policy — D-018…D-021). **§10 is now the commercialization blueprint, not day-1 work.**
 **Scope:** MVP (6 weeks, 3×2-week sprints) for 10–50 users, self-hosted Docker Compose.
 **Product model:** Asana-style — projects/tasks/sections/boards **plus** a portfolio layer (roll-ups, portfolio timeline), which is exactly the gap that ruled out most benchmarked competitors (see `pm-tool-benchmark/research-notes.md`, Asana "Portfolio specifics").
 
@@ -79,7 +79,7 @@ One Maven module (or one Spring `@Configuration`-bounded package) per product mo
 | Module | Owns | Notes |
 |---|---|---|
 | `auth` | login/logout/refresh, password-reset tokens, Spring Security filter chain, multi-provider identity framework (`IdentityProvider` port, per-provider enable/disable, `user_identities`, break-glass CLI) | §4.3 — local + Lark toggleable; Entra OIDC drops in later |
-| `orgs` | organizations (tenants), memberships, org-level roles, invites (tokenized, expiring, revocable — spec A3), org lifecycle (create/suspend), org switcher context | **Multi-tenant from MVP day 1 (D-022):** many orgs per deployment; org creation gated by `SIGNUP_MODE=closed\|invite\|open` (closed for the pilot); our own org is simply tenant #1 |
+| `orgs` | organization (one per install), memberships, org-level roles, invites (tokenized, expiring, revocable — spec A3) | **Single-org in the MVP (D-028):** first-run creates the one org; the `organization_id` column + org-filter helper exist so multi-org is later an activation, not a migration. `SIGNUP_MODE` / org switcher / org lifecycle = commercialization (§10) |
 | `teams` | teams, team membership | Grouping + default access scope for projects |
 | `projects` | projects, sections, project membership, status colors/icons | Section CRUD lives here (sections are project-scoped) |
 | `tasks` | tasks, subtasks, assignees, ordering, due dates | The hot path; owns lexo-rank reordering logic |
@@ -100,7 +100,7 @@ One Maven module (or one Spring `@Configuration`-bounded package) per product mo
 
 - **Edge validation**: **Jakarta Bean Validation** (`@Valid` + constraints) on the request DTOs, enforced by Spring at the controller boundary (authoritative). The web reuses the generated types plus light client-side checks for UX — the server always re-validates (§1.3).
 - **Invariant validation**: DB constraints (FKs, `CHECK`, unique indexes) are the last line — e.g. unique `(project_id, portfolio_id)` in `portfolio_projects`. Never trust the app layer alone.
-- **Authz**: a Spring Security filter chain authenticates the session; method-level checks (`@PreAuthorize` / a small policy service) enforce the §6 RBAC matrix, always scoped to the request's tenant. **Tenant isolation is double-walled (D-023, reverses the v2 "RLS is overkill" call now that this is a multi-tenant SaaS):** (1) every jOOQ query filters by `organization_id` in application code, and (2) **Postgres row-level security** on every tenant-owned table — a servlet filter resolves the caller's org, and a transaction-synchronized hook issues `SET LOCAL app.current_org_id = ?` at the start of each transaction (transaction-scoped, so it is **PgBouncer-safe** in transaction-pooling mode); RLS policies refuse rows from any other tenant. A bug in layer 1 becomes an empty result, never a cross-tenant leak. RLS policies live in Flyway migrations and are covered by a dedicated isolation test suite (§8).
+- **Authz**: a Spring Security filter chain authenticates the session; method-level checks (`@PreAuthorize` / a small policy service) enforce the §6 RBAC matrix, always scoped to the request's org. **Isolation in the single-org MVP (D-028):** every tenant-owned jOOQ query goes through one **org-scoped query helper** that applies the `organization_id` filter — so the column and the seam exist from day 1 and nothing needs retrofitting. A servlet filter resolves the caller's org into a request-scoped context the helper reads. **Postgres RLS is deferred** to the commercialization phase (§10): at single-org there is one tenant and no cross-tenant surface, so the app-layer filter is sufficient and RLS would be effort against a risk that doesn't exist yet. When multi-tenancy activates, RLS + the per-transaction `SET LOCAL` GUC become the second wall (the design is preserved in §10) — and the org-helper discipline is what makes adding it a policy migration, not a refactor.
 
 ### 2.4 Error model
 
@@ -287,7 +287,7 @@ Notes:
 - **Subtasks** are a self-reference (`parent_task_id`). MVP allows **one level** of nesting (enforced in service, `CHECK` deferred) — matches Asana's practical usage, avoids recursive-query complexity in views.
 - **Invites and password-reset tokens** (spec A2/A3): tokens stored hashed (never plaintext), single-use, expiring (invites 14 d per spec A3, resets 1 h), revocable. Accepting an invite creates the `users` row + `memberships` row in one transaction.
 - **`user_identities` ships in the MVP schema** (empty until Lark goes live in week 7, D-020): one row per external identity, `UNIQUE (provider, subject)`. Enabling a provider is a deploy + env change, never a migration. Local auth stays on `users.password_hash` (nullable — a Lark-only user has no password).
-- **Tenancy shape (D-022):** users are global (one account, one email); tenancy attaches through `memberships` — one user can belong to many organizations (Slack model). Resource IDs are globally-unique UUIDv7, so web URLs need no org prefix: the resource's own `organization_id` + the caller's membership decide access, and the sidebar/org-switcher sets the browsing context. Every tenant-owned table carries `organization_id` (directly or via its aggregate root) and an RLS policy.
+- **Tenancy shape (D-028, single-org):** one organization per install; every user is a member of it via `memberships`. Every tenant-owned table carries `organization_id` (directly or via its aggregate root) and all access flows through the org-filter helper (§2.3) — so the column and the discipline are there from day 1. The multi-org model (global users belonging to many orgs, org switcher, RLS) is the commercialization design in §10 and stays a *forward-compatible* additive change: the schema already carries the column the future RLS policies key on. Resource IDs are globally-unique UUIDv7, so web URLs never need an org prefix.
 - **Dormant columns, explicitly inert**: `users.avatar_url` (initials-only in MVP, PD-34) and `projects.private` (defaults false; no authz branch, no RBAC row, no UI reads it — kept only to avoid a Phase-4 backfill migration, per the PD-25 ruling). CI greps assert no non-migration code references them.
 - **Multi-homing tasks across projects** (Asana feature) is explicitly **out of MVP**: task belongs to exactly one project. [one-way door softened: if ever needed, introduce a `task_projects` join and backfill — schema change but mechanical.]
 - `projects.current_status` is denormalized from the latest `project_status_updates` row (updated in the same transaction) so portfolio roll-up reads never join/aggregate status history.
@@ -357,17 +357,11 @@ All FKs get supporting indexes (Postgres does not auto-create them). Partial ind
 
 **The drop-in guarantee** stays, now stated for all providers: adding or toggling a provider touches only the api's `auth` module (`apps/api/src/main/java/.../auth/**`) and the login page — kept honest by an acceptance test.
 
-### 4.4 Realtime: SSE for MVP — [reversible]
+### 4.4 Realtime: refetch-on-focus for the MVP; SSE deferred — [revised per D-028]
 
-Decision: **Server-Sent Events**, one endpoint `GET /api/v1/events` (auth via session cookie), backed by Valkey pub/sub. Client subscribes to the entities it has open (project board, task, notifications badge); events are thin (`{ type: "task.updated", taskId, projectId }`) and the client refetches — no state-sync protocol to design or debug.
+Decision: the MVP does **not** ship a realtime channel. Mutations use optimistic update + **refetch-on-window-focus** (React Query default), so views are never wrong, only occasionally a few seconds stale — entirely acceptable for a single-org team of tens of users. This removes a whole subsystem from the 2-week M1 and the M2/M3 milestones.
 
-Why not the alternatives, against a 6-week clock:
-- **Polling**: simplest, but 50 users × per-board polling gives worse UX (multi-second staleness) for barely less work than SSE — Spring MVC returns SSE natively (`SseEmitter` / a `text/event-stream` `Flux`), fed by a Valkey pub/sub listener, so SSE is ~2 days.
-- **WebSocket**: bidirectional transport we don't need (all writes go through REST), plus gateway lifecycle, reconnect/backoff, and proxy config to get right. Deferred; if we ever need client→server streaming (live cursors, presence), the Valkey pub/sub backbone already exists and the client swap is contained in one hook.
-
-Fallback: SSE auto-reconnects natively; on top we refetch-on-window-focus (React Query default), so a dropped stream degrades to slightly-stale, never wrong.
-
-**Build-order rule (PD-4, formalizing risk #4's mitigation as schedule):** SSE is the *last* Sprint-3 item, started only after board, portfolio roll-up, and notifications are demo-complete. Pre-agreed cut line: if week 5 opens with any red feature, SSE is dropped from MVP without a meeting and optimistic-update + refetch-on-focus ships as the realtime story (AC0.2 is satisfiable that way). The Valkey pub/sub plumbing costs nothing to keep for a Phase-1 revival.
+When live updates are wanted (an M3 nicety at most, or at commercialization): **Server-Sent Events**, one endpoint `GET /api/v1/events`, thin events (`{ type: "task.updated", taskId }`) that trigger a client refetch — no state-sync protocol. With the single API replica of the MVP this is in-process (`SseEmitter`); the **Valkey pub/sub fan-out** is only needed once there is more than one replica (commercialization, §10). WebSocket stays declined (all writes go through REST).
 
 ### 4.5 API docs
 
@@ -375,14 +369,14 @@ Fallback: SSE auto-reconnects natively; on top we refetch-on-window-focus (React
 
 ---
 
-## 5. File storage: S3-compatible in production behind the `StorageProvider` port — [revised per D-022]
+## 5. File storage: local disk volume behind the `StorageProvider` port — [revised per D-028]
 
-**Production: S3-compatible object storage from day 1** (`S3Storage` impl; any S3 API — a cloud bucket, or SeaweedFS if it must stay on-VM — never MinIO, per the licensing appendix). Local disk is wrong for a multi-tenant SaaS: it pins the API to one node (blocking replicas), grows a single volume across tenants, and complicates per-tenant export. Keys laid out `orgId/attachmentId/filename` so per-tenant lifecycle (quota, export, delete) is a prefix operation. **Dev/test: `LocalDiskStorage`** keeps the loop fast; the provider is config-selected.
+**MVP: local Docker volume** (`LocalDiskStorage`, keys laid out `orgId/attachmentId/filename` so the S3 swap is later a prefix-preserving migration). For a single-org internal tool on one VM this is the right call — one moving part fewer, trivial backup alongside the pg_dump. **S3-compatible object storage** (`S3Storage`; a cloud bucket or SeaweedFS — never MinIO, per the licensing appendix) is a **config-selected swap at commercialization**, when API replicas must be disposable and per-tenant export/quota matter (§10).
 
-Swappability remains enforced, not hoped for:
-- `collab` depends only on `StorageProvider { put(stream, meta) → storageKey; getStream(storageKey); delete(storageKey); }`. `S3Storage` is the production impl (D-022); `LocalDiskStorage` serves dev/test. `attachments.storage_key` is provider-agnostic.
-- Downloads always stream **through the API** (authz + RLS check per request) — never direct file URLs. Switching to S3 presigned URLs later is an optimization inside the provider, not an API change.
-- Limits: 25 MB/file, allowlist-by-extension + sniffed content-type, **per-org quota enforced** (default 10 GB, override via `organizations.limits`, hard-stop with a clear error + admin warning at 80%). Files served with `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff` (no stored-XSS via uploaded HTML/SVG).
+Swappability is enforced, not hoped for:
+- `collab` depends only on `StorageProvider { put(stream, meta) → storageKey; getStream(storageKey); delete(storageKey); }`. `LocalDiskStorage` is the MVP impl; `S3Storage` is the commercialization swap. `attachments.storage_key` is provider-agnostic.
+- Downloads always stream **through the API** (authz check per request via the org helper) — never direct file URLs. Switching to S3 presigned URLs later is an optimization inside the provider, not an API change.
+- Limits: 25 MB/file, allowlist-by-extension + sniffed content-type, and a single instance-wide storage watermark (per-org quotas arrive with multi-tenancy at commercialization). Files served with `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff` (no stored-XSS via uploaded HTML/SVG).
 
 ---
 
@@ -446,12 +440,12 @@ These are comfortable on one 4 vCPU / 8 GB VM; we assert them in a Sprint-3 k6 r
 |---|---|---|
 | `traefik` | traefik:v3 | 80/443 published; auto-TLS via built-in ACME (Let's Encrypt) or internal CA for intranet-only; `acme.json` on a volume; dashboard disabled in prod; the **only** service with published ports |
 | `web` | our Next.js image (multi-stage, standalone output) | |
-| `api` | our Spring Boot image (multi-stage: Maven build → `eclipse-temurin:21-jre` runtime, layered jar) | runs Flyway migrations on startup (Spring Boot auto-runs them) |
-| `postgres` | postgres:16 | volume `pgdata`; not exposed to host |
-| `pgbouncer` | pgbouncer (edoburu image or equivalent) | transaction pooling between api replicas and Postgres — required the moment `api` scales past one replica; present from day 1 so it's exercised, not theoretical |
-| `valkey` | valkey/valkey:8 | AOF on; not exposed; Redis-protocol compatible (BSD-3) |
-| `worker` | same api image, `worker` Spring profile | Redisson queue consumers + `@Scheduled` jobs (notification fan-out, purge, quota watermarks) extracted from the api process (D-022) — api replicas stay purely request-serving |
-| `backup` | postgres:16 + cron script | nightly pg_dump + attachment snapshot (§6.2) |
+| `api` | our Spring Boot image (multi-stage: Maven build → `eclipse-temurin:21-jre` runtime, layered jar) | runs Flyway migrations on startup; a single replica serves requests **and** runs background jobs in-process (`@Async` + `@Scheduled`) — no separate worker in the MVP |
+| `postgres` | postgres:16 | volume `pgdata`; not exposed to host; the api connects with a normal HikariCP pool (one replica → no PgBouncer needed yet) |
+| `valkey` | valkey/valkey:8 | sessions/refresh-token denylist + rate-limit counters; AOF on; not exposed; Redis-protocol compatible (BSD-3) |
+| `backup` | postgres:16 + cron script | nightly pg_dump + attachment-volume snapshot (§6.2) |
+
+**Deferred to commercialization (§10, D-028):** `pgbouncer` (needed only once `api` runs >1 replica) and a separate `worker` container (extract the in-process jobs along the existing seam). Both are named here so the day-1 code stays worker-and-pool-ready, but neither is a container in the MVP.
 
 **Traefik over Caddy and nginx** — [reversible; revised per D-018]: the original draft chose Caddy for zero-config auto-TLS. The owner set a **permissive-license-only policy** for every shipped runtime component, to keep future commercialization unencumbered. For accuracy: Caddy v2 itself is Apache-2.0 (commercial use is permitted — the historical restriction applied to v1's official binaries), but Traefik is MIT, equally capable here (built-in ACME auto-TLS, header middlewares, native Docker provider), and swapping now removes any diligence-time discussion entirely. nginx (BSD-2) + certbot remains the maximally-boring fallback, at the cost of a second moving part (cert renewal + reload orchestration) — adopt it only if Traefik misbehaves. Config lives in `docker/traefik.yml` + one dynamic file; routing via container labels.
 
@@ -492,7 +486,7 @@ These are comfortable on one 4 vCPU / 8 GB VM; we assert them in a Sprint-3 k6 r
 
 Principles: integration tests against a **real** Postgres (Testcontainers) are the backbone — mocked-DB tests would miss exactly our risk areas (ordering, constraints, roll-up SQL, and RLS itself). E2E stays at one smoke flow; it's a tripwire, not a spec.
 
-**CI (GitHub Actions)**, two lanes per PR: **api lane** (`mvn verify` — spotless/checkstyle + unit + Testcontainers integration + jar build) and **web lane** (lint + typecheck + build + `pnpm audit`), then a shared **Playwright smoke** against the compose stack, an **api-client drift check** (regenerate from the OpenAPI spec and fail on diff — §1.3), and the **license gate** — now covering both npm (license-checker) and Maven (`license-maven-plugin`) against the Appendix allowlist, so a copyleft/source-available dependency on either side fails the build. `main` builds and pushes release images. A scheduled weekly job runs `prisma migrate deploy` against a restored copy of the latest prod dump — migration + backup verification in one.
+**CI (GitHub Actions)**, two lanes per PR: **api lane** (`mvn verify` — spotless/checkstyle + unit + Testcontainers integration + jar build) and **web lane** (lint + typecheck + build + `pnpm audit`), then a shared **Playwright smoke** against the compose stack, an **api-client drift check** (regenerate from the OpenAPI spec and fail on diff — §1.3), and the **license gate** — now covering both npm (license-checker) and Maven (`license-maven-plugin`) against the Appendix allowlist, so a copyleft/source-available dependency on either side fails the build. `main` builds and pushes release images. A scheduled weekly job runs Flyway migrations against a restored copy of the latest prod dump — migration + backup verification in one.
 
 ---
 
@@ -500,38 +494,40 @@ Principles: integration tests against a **real** Postgres (Testcontainers) are t
 
 | # | Risk | Likelihood / Impact | Mitigation |
 |---|---|---|---|
-| 1 | **Board ordering conflicts** — concurrent drags produce duplicate/exhausted fractional keys, items "jump" | Med / Med | Server-computed keys only (`/move` API); ties tolerated with deterministic tie-break; background rebalance; dedicated race-condition integration tests; SSE refresh makes the other client converge in <2 s |
-| 2 | **Portfolio timeline/roll-up query cost** — N projects × M tasks aggregates get slow or, worse, get built as N+1 in the app | Med / High (it's the differentiating feature) | Single SQL aggregate per portfolio (raw, indexed, tested with seeded 50-project/10k-task dataset in Sprint 2 — not Sprint 3); denormalized `projects.current_status`; k6 assertion < 500 ms; fallback: 60 s Valkey cache on the roll-up read (one flag) |
-| 3 | **Attachment storage growth / backup bloat** — volume outgrows disk or makes backups slow | Med / Med | 25 MB/file cap + per-org quota + admin usage view from day 1; attachments on separate mount; `StorageProvider` seam means MinIO/S3 migration is a copy script + config flip, no API change |
-| 4 | **Realtime scope creep** — SSE turns into a half-built state-sync layer eating Sprint 2/3 | High / High (timeline risk) | Events are notify-only (client refetches); hard scope: task/board/notification events only; polling-on-focus already works without SSE, so SSE can be cut in extremis without losing correctness |
-| 5 | **Single-VM data loss / failed restore** — backups exist but don't restore | Low / Critical | `pg_dump` + volume snapshot + off-VM sync (§6.2); restore drill pre-go-live and quarterly; weekly CI job restores latest dump and runs migrations against it — a corrupt backup is detected within 7 days, not at disaster time |
-| 6 | **Cross-tenant data leak** — a missed org filter or RLS policy gap exposes one tenant's data to another (the SaaS-killing defect class) | Low / **Critical** | Double-wall isolation (app filter + RLS, §2.3); RLS policies generated per table in migrations, reviewed as a set; tenant-isolation integration suite incl. the layer-1 bug drill (§8) runs on every PR; new tables cannot merge without an RLS policy (CI grep on migrations); `/metrics` per-org counters make anomalous cross-org access patterns visible |
+| 1 | **Board ordering conflicts** — concurrent drags produce duplicate/exhausted fractional keys, items "jump" | Med / Med | Server-computed keys only (`/move` API); ties tolerated with deterministic tie-break; background rebalance; dedicated race-condition integration tests; refetch-on-focus makes the other client converge quickly |
+| 2 | **Portfolio roll-up query cost** — N projects × M tasks aggregates get slow or, worse, get built as N+1 in the app | Med / High (it's the differentiating feature) | Single jOOQ SQL aggregate per portfolio (bind-parameterized, indexed, tested with a seeded 50-project/10k-task dataset in **M2**); denormalized `projects.current_status`; asserted < 500 ms; fallback: short Valkey cache on the roll-up read (one flag) |
+| 3 | **Attachment storage growth / backup bloat** — the local volume outgrows disk or makes backups slow | Med / Med | 25 MB/file cap + an instance-wide storage watermark + admin usage view; attachments on a separate mount; `StorageProvider` seam means the S3 migration is a copy script + config flip, no API change |
+| 4 | **Realtime scope creep** — a live channel turns into a half-built state-sync layer | High / High | The MVP ships **no realtime** — optimistic update + refetch-on-focus only (§4.4); SSE is an explicit later add, notify-only (client refetches), never a state-sync protocol |
+| 5 | **Single-VM data loss / failed restore** — backups exist but don't restore | Low / Critical | `pg_dump` + attachment-volume snapshot + off-VM sync (§6.2); restore drill pre-go-live and quarterly; weekly CI job restores the latest dump and runs migrations against it — a corrupt backup is detected within 7 days, not at disaster time |
+| 6 | **Org-filter miss** — a query forgets the `organization_id` filter | Low / Med (single-org: no *other* tenant to leak to, so bounded) | One shared org-scoped query helper (§2.3) that every tenant read/write goes through — reviewed, not sprinkled; the `organization_id` column is present so RLS closes this as a hard second wall at commercialization (§10) |
 
-Watchlist (not top-6): jOOQ codegen kept in sync with Flyway migrations (build regenerates; drift fails compile); Next.js / Spring Boot version churn (pin, upgrade in Sprint gaps); auth-seam erosion (acceptance test in §4.3 keeps SSO honest); **RLS + PgBouncer interaction** (transaction pooling requires the GUC be set with `SET LOCAL` inside each transaction, never per-session — enforced by the transaction-synchronized hook in `core` and covered by the isolation suite); OpenAPI-client drift (CI regenerate-and-diff check).
+Watchlist (not top-6): jOOQ codegen kept in sync with Flyway migrations (build regenerates; drift fails compile); Next.js / Spring Boot version churn (pin, upgrade between milestones); auth-seam erosion (acceptance test in §4.3 keeps SSO honest); OpenAPI-client drift (CI regenerate-and-diff check); **the org-helper discipline** (the single seam that makes the future RLS wall a policy migration rather than a refactor — keep every tenant query going through it).
 
 ---
 
-## 10. Multi-tenant SaaS: scale invariants & tier roadmap (D-022)
+## 10. Commercialization blueprint: multi-tenant SaaS (DEFERRED — D-028)
 
-### 10.1 Invariants — what the MVP must never do wrong
+**This whole section is a future, gated phase, not day-1 work.** The internal MVP is single-org (D-028). What follows is the design we *activate* if the pilot proves value and the owner elects to commercialize — kept here so the MVP can be built without foreclosing it, and so nobody re-derives it later.
 
-These are the rules that keep every scale tier reachable without a rewrite. They are cheap to hold now and ruinous to retrofit:
+### 10.1 Cheap invariants the MVP honors now (so commercialization is activation, not rewrite)
 
-1. **Stateless api & worker** — no request state outside Postgres/Valkey/object storage; any replica can serve any request (sessions are JWT cookies; SSE fan-out rides Valkey pub/sub).
-2. **Every tenant-owned row carries `organization_id` + an RLS policy**; the GUC is set per transaction (PgBouncer-safe).
-3. **No local disk in prod** — attachments in object storage (§5); containers are disposable.
-4. **All DB access through PgBouncer**; connection counts are a pool config, not a per-replica multiplication.
-5. **Cursor pagination only** (already banned offset) — stable under concurrent tenants.
-6. **Background work only via the queue** — never in request handlers; workers scale independently.
-7. **Migrations expand → migrate → contract** — always one-version backward compatible, so rolling deploys work at every tier.
-8. **Config via env only** (12-factor) — the same images run compose today and an orchestrator later.
-9. **Per-org limits enforced at the edge** (rate, storage, watermarks) — noisy neighbors are contained by default.
+A subset of the SaaS invariants cost nothing today and would be ruinous to retrofit — the MVP holds these from day 1:
+
+1. **Stateless api** — no request state outside Postgres/Valkey/local volume; sessions are JWT cookies. (One replica now; horizontally scalable later.)
+2. **Every tenant-owned row carries `organization_id`**, and all access goes through the one org-scoped query helper (§2.3). RLS is the *second* wall, added at commercialization.
+3. **Cursor pagination only** (offset banned).
+4. **Migrations expand → migrate → contract** — one-version backward compatible.
+5. **Config via env only** (12-factor) — the same images run compose now and an orchestrator later.
+
+### 10.1b Activated at commercialization (not in the MVP)
+
+RLS + per-transaction GUC (the second isolation wall) · PgBouncer (once >1 api replica) · a separate worker container (extract the in-process jobs) · S3 object storage (disposable replicas) · per-org quotas + edge rate limits · `SIGNUP_MODE`/org-switcher multi-org UI · `/metrics` + observability · **independent security review + pen test** before any real external tenant.
 
 ### 10.2 Scale tiers — each with a trigger, none started early
 
 | Tier | Shape | Serves (rule of thumb) | Trigger to move up |
 |---|---|---|---|
-| **T0 — now (MVP/pilot)** | One VM, Docker Compose: traefik, web, api, worker, pgbouncer, postgres, valkey, backup; S3 bucket for files | Tens of orgs, ~500 total users | Sustained p95 > targets after vertical bump, or first paying external tenant |
+| **T0 — commercialization entry** | One VM, Docker Compose: traefik, web, api, worker, pgbouncer, postgres, valkey, backup; S3 bucket for files | Tens of orgs, ~500 total users | Sustained p95 > targets after vertical bump, or first paying external tenant |
 | **T1 — split & replicate** | Same compose topology, bigger/second VM: 2–3 api replicas behind Traefik, managed PostgreSQL (or dedicated DB VM with replication + PITR), Prometheus/Grafana attach to `/metrics` | Hundreds of orgs, ~5k users | Ops toil (deploys, capacity juggling) exceeds ~½ day/week, or availability SLO demanded by customers |
 | **T2 — orchestrate** | Kubernetes or a managed container platform: HPA on api/worker, managed Postgres + read replica (roll-up reads), CDN for static assets, Loki logs, subdomain-per-org with wildcard TLS, status page | Thousands of orgs | Multi-region data-residency or SLA requirements from customers |
 | **T3 — regionalize** | Per-region cells (EU/ME/APAC), tenant-pinned-to-cell (no cross-region DB), global edge routing | As demanded | — |
@@ -553,16 +549,16 @@ Cairn ships as a **modular monolith** — one Spring Boot `api` deployable — p
 - **Tenant isolation is our crown-jewel invariant (D-023) and is simplest and safest in one datastore.** One Postgres + RLS + the per-transaction GUC is the whole story. Microservices force either a **shared DB across services** (the distributed-monolith anti-pattern) or **a DB per service**, each needing its own org-context plumbing and RLS policies — multiplying the surface area for the one defect class that kills a SaaS (cross-tenant leak, R9). Decomposition makes our most important property *harder and riskier*.
 - **Core writes are single transactions today.** "Task move + reorder", "status update → activity → notification enqueue" are one `@Transactional` unit. Across service boundaries they become sagas / eventual consistency — real complexity and new failure modes for zero benefit at 10–50 users per tenant.
 - **The differentiating read is one SQL aggregate.** The portfolio roll-up (R5) joins projects, tasks, and latest status in a single indexed query. Split those into separate services with separate stores and it degrades into API composition / N+1 — worsening the exact feature Cairn exists for.
-- **Operational reality.** T0 is one VM on Docker Compose, built by one implementer to a 6-week MVP. N services = N pipelines, service discovery, inter-service authn, distributed tracing — cost with no payoff. Vertical Postgres + api replicas behind PgBouncer (T1) and HPA (T2) carry this I/O-light workload far past any realistic tenant count before decomposition is even a question.
+- **Operational reality.** The MVP is one VM on Docker Compose, built by one implementer + owner reviewer to a ~2-week first milestone (D-028). N services = N pipelines, service discovery, inter-service authn, distributed tracing — cost with no payoff. Vertical Postgres + api replicas behind PgBouncer and HPA (commercialization tiers) carry this I/O-light workload far past any realistic tenant count before decomposition is even a question.
 - **Build model.** Claude Code builds in small vertical slices verified end-to-end (docs/05); microservices cut horizontally against that, spreading context and integration surface and slowing verification.
 
 ### 11.2 What we do keep — so the option stays open (modular-monolith discipline)
 
-Already enforced in §2 and `CLAUDE.md`: hard module boundaries; no module reaches into another's internals (only its public service interface); cross-module comms via `ApplicationEventPublisher`, with durable fan-out already riding the Valkey queue; stateless api. This is what prevents the "big ball of mud" failure mode of a lazy monolith and keeps a clean carve-out possible.
+Already enforced in §2 and `CLAUDE.md`: hard module boundaries; no module reaches into another's internals (only its public service interface); cross-module comms via `ApplicationEventPublisher` (in-process now; a Valkey queue when the worker splits out); stateless api. This is what prevents the "big ball of mud" failure mode of a lazy monolith and keeps a clean carve-out possible.
 
 ### 11.3 Extraction triggers — any one re-opens the question (as a decision-log entry)
 
-Extract **one hot component** along its existing seam; never "decompose into microservices" wholesale. First candidates, in likelihood order: **notifications/fan-out**, **search** (Phase 2, once it gains its own index/engine), **attachments/media** processing. Triggers:
+Extract **one hot component** along its existing seam; never "decompose into microservices" wholesale. First candidates, in likelihood order: **notifications/fan-out**, **search** (once it gains its own index/engine), **attachments/media** processing. Triggers:
 
 1. A component with a genuinely different scaling or resource profile that is starving the api (measured, not assumed).
 2. Independent team ownership (we have none today).
@@ -584,16 +580,16 @@ None hold today. If Cairn becomes a multi-product platform with several engineer
 | Data access | **jOOQ** (Apache-2.0) + Flyway migrations — D-026 | semi one-way |
 | Ordering | fractional indexing (lexo-rank strings), server-computed | reversible |
 | Auth | JWT cookie sessions + multi-provider `IdentityProvider` framework (Spring Security); local + Lark toggleable via env; Entra later (D-020) | designed for provider drop-in |
-| Realtime | SSE (Spring `SseEmitter`) + Valkey pub/sub, notify-then-refetch | reversible (WS later) |
-| Tenancy | multi-tenant from day 1: global users + per-org memberships, `organization_id` + **RLS on every tenant table** (GUC via `SET LOCAL`), per-org quotas, `SIGNUP_MODE` gate — D-022/D-023 | one-way (good) — retrofitting tenancy is the rewrite we refuse |
-| Attachments | S3-compatible object storage in prod behind `StorageProvider` (local disk in dev) — D-024 | reversible per provider |
-| DB pooling | PgBouncer (transaction mode) from day 1 | reversible |
-| Workers | same Spring jar, `worker` profile; Redisson queue + `@Scheduled` — D-022 | reversible |
+| Realtime | **MVP: none** — optimistic update + refetch-on-focus; SSE (`SseEmitter`) a later add — D-028 | reversible (add SSE; WS never) |
+| Tenancy | **MVP: single-org** — one org/install, `organization_id` + app-layer org-filter helper (the cheap seam). RLS + GUC + per-org quotas + multi-org UI = commercialization (§10) — D-028 | seam kept; RLS is an additive migration, not a rewrite |
+| Attachments | **MVP: local disk volume** behind `StorageProvider`; S3 at commercialization — D-028 | reversible per provider |
+| DB pooling | **MVP: direct HikariCP** (one replica); PgBouncer at commercialization — D-028 | reversible |
+| Workers | **MVP: in-process** `@Async` + `@Scheduled`; separate worker jar/profile at commercialization — D-028 | reversible (seam kept) |
 | Proxy/TLS | Traefik v3 (MIT) — D-018 | reversible (nginx + certbot fallback) |
-| Cache/queue/pub-sub | Valkey 8 (BSD-3), Redis-protocol drop-in — D-019 | reversible |
+| Cache/queue/pub-sub | Valkey 8 (BSD-3): sessions + rate-limit now; queue/pub-sub at commercialization — D-019 | reversible |
 | License policy | permissive-only runtime stack, CI-gated allowlist — D-021 | policy (see licensing appendix) |
-| Scale path | tiered T0→T3 with explicit triggers (§10); no k8s/sharding before their tier | policy |
-| Topology | **modular monolith** (one Spring Boot api) + worker; **microservices declined** — extraction seams kept, triggers named (§11) — D-027 | reversible by carving one component along its seam |
+| Scale path | single-org now; multi-tenant SaaS tiers T0→T3 are a gated future phase (§10) — D-028 | policy |
+| Topology | **modular monolith** (one Spring Boot api) + in-process jobs; **microservices declined** — extraction seams kept, triggers named (§11) — D-027 | reversible by carving one component along its seam |
 | Multi-homing tasks | excluded from MVP | additive migration if needed |
 | Pagination | cursor-based only | one-way (good) |
 | IDs / URLs | UUIDv7 everywhere; web `/tasks/:id` + `?task=` overlay; no slugs | one-way (good) |

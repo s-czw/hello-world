@@ -3,8 +3,19 @@
 **Document:** 04-delivery-plan.md
 **Author:** Project Director
 **Date:** 20 July 2026
-**Status:** v1.1 — re-baselined against spec v1.2 + architecture v3.0 (D-022 multi-tenant SaaS re-architecture; see the Re-baseline block in §1). Original baseline: spec v1.1, architecture Draft v2, design v2 (all PD-1…PD-42 dispositions applied; no open rebuttals)
-**Inputs:** 01-product-spec.md (v1.1) · 02-architecture.md (Draft v2) · 03-design.md (v2) · review-pmo.md · pm-tool-benchmark/research-notes.md
+
+> ## ⚠️ SUPERSEDED for team model, scope, and schedule — see `docs/05` + D-028
+> This document was written for a **four-person human team over a 6-week / 3-sprint calendar building a
+> multi-tenant SaaS**. After the external-advisor review, the owner re-baselined (D-028): the team is
+> **you + Claude Code**, the MVP is **single-org**, and the target is a **usable product in ~2 weeks**,
+> milestone-based with flexible dates. **`docs/05-claude-build-plan.md` is the delivery plan of record.**
+> What remains useful and current here: the **Definition of Done** (§4), the **governance/scope-change
+> rules** (§4), the **UAT script** and **rollback plan** (§7), and the **pilot adoption/kill-pivot** thinking
+> (§5 R8, spec §7). Ignore the sprint calendar, the RACI, the PE-day/TL-day capacity math, and every
+> multi-tenant/SaaS line below — those are retired. Where this doc and D-028/`docs/05` disagree, they win.
+
+**Status:** v1.1 (superseded by D-028 for team/scope/schedule; retained for DoD, governance, UAT, rollback).
+**Inputs:** 01-product-spec.md · 02-architecture.md · 03-design.md · review-pmo.md · pm-tool-benchmark/research-notes.md
 
 ---
 

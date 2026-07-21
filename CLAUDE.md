@@ -24,17 +24,20 @@ without a rewrite. Full rationale: `docs/README.md` → `docs/01-product-spec.md
 Polyglot monorepo (one git repo, two build systems). **Web:** Next.js (App Router) / React, TypeScript,
 pnpm. **API:** **Java 21 / Spring Boot, Maven** (D-026 — replaced NestJS). PostgreSQL 16 · **jOOQ**
 (Apache-2.0, *not* Hibernate) + Flyway migrations · Valkey 8 (Redis-protocol; **never** Redis ≥7.4) ·
-Traefik v3 TLS · PgBouncer (transaction mode) · worker = same Spring jar, `worker` profile (Redisson queue
-+ `@Scheduled`) · S3-compatible object storage in prod (local disk dev only). The web↔api contract is
-**OpenAPI-generated** (`springdoc-openapi` → `packages/api-client`), *not* shared source; a CI drift check
-fails the build if the client is stale. Server validation = Jakarta Bean Validation.
+Traefik v3 TLS. **MVP is single-org and lean (D-028):** one `api` replica that runs background jobs
+in-process (`@Async`/`@Scheduled`), a direct HikariCP pool (no PgBouncer), local-disk attachment storage,
+no realtime channel (refetch-on-focus). PgBouncer, a separate worker container, S3 storage, SSE, and all
+multi-tenancy live in the gated commercialization phase (arch §10) — **do not build them in the MVP.** The
+web↔api contract is **OpenAPI-generated** (`springdoc-openapi` → `packages/api-client`), *not* shared
+source; a CI drift check fails the build if the client is stale. Server validation = Jakarta Bean Validation.
 
 ## Non-negotiable invariants (breaking one is a release blocker)
 
-- **Tenant isolation is double-walled (D-023).** Every tenant-owned query filters by `organization_id`
-  in app code AND every tenant table has a Postgres RLS policy; the API sets `app.current_org_id` per
-  transaction (PgBouncer-safe). **A new table touching tenant data cannot merge without an RLS policy.**
-  Never return, count, or mutate another tenant's rows.
+- **Single-org, and the org-filter is the seam (D-028).** Every tenant-owned query goes through the shared
+  org-scoped query helper that applies the `organization_id` filter; the column is on every tenant table so
+  RLS drops in as the second wall at commercialization (the D-023 design — deferred, not built now). **Never
+  write a tenant query that bypasses the org helper.** Do not add RLS, multi-org UI, or any SaaS machinery
+  to the MVP.
 - **Permissive licenses only (D-021).** Shipped runtime deps must be MIT/BSD/Apache/ISC/PostgreSQL/OFL/CC0.
   No strong copyleft (GPL/AGPL) or source-available (SSPL/RSAL/BUSL/FSL) in shipped code. The CI license
   gate (npm + Maven) enforces this — don't add a dep that fails it (notably: **jOOQ not Hibernate**, no
@@ -57,9 +60,9 @@ fails the build if the client is stale. Server validation = Jakarta Bean Validat
 
 1. Acceptance criteria demonstrated in the running app (not just a branch).
 2. Tests for the layer touched: integration test for any new endpoint (JUnit + Testcontainers real
-   Postgres+Valkey); unit tests for ordering/authz/roll-up logic; **new endpoints on tenant data get an
-   isolation test**. CI green (both lanes: `mvn verify` + web lint/typecheck/build, Playwright smoke,
-   OpenAPI-client drift check, `pnpm audit`, license gate).
+   Postgres+Valkey); unit tests for ordering/authz/roll-up logic; **a test asserts new tenant endpoints go
+   through the org-filter helper**. CI green (both lanes: `mvn verify` + web lint/typecheck/build, Playwright
+   smoke, OpenAPI-client drift check, `pnpm audit`, license gate).
 3. Deployed to the staging compose stack.
 4. Accessibility: axe scan + keyboard pass on new UI surfaces (WCAG 2.2 AA, light theme).
 5. Scope: if it's not in spec Appendix A, it needs a `docs/decisions.md` entry + an equal-effort cut
