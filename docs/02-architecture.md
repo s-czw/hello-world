@@ -1,6 +1,6 @@
 # Architecture — Self-Hosted Program & Project Management Tool
 
-**Author:** Tech Lead · **Date:** 20 July 2026 · **Status:** Draft v2 — pending spec v1.1 sign-off (sign-off order: spec → architecture/design → build, per PD-38)
+**Author:** Tech Lead · **Date:** 20 July 2026 · **Status:** v2.1 — owner-requested revision (20 Jul): permissive-license stack policy (Traefik replaces Caddy, Valkey replaces Redis, licensing appendix added) + multi-provider auth with toggleable local/Lark sign-in (D-018…D-021). Base: Draft v2 — pending spec v1.1 sign-off (sign-off order: spec → architecture/design → build, per PD-38)
 **Scope:** MVP (6 weeks, 3×2-week sprints) for 10–50 users, self-hosted Docker Compose.
 **Product model:** Asana-style — projects/tasks/sections/boards **plus** a portfolio layer (roll-ups, portfolio timeline), which is exactly the gap that ruled out most benchmarked competitors (see `pm-tool-benchmark/research-notes.md`, Asana "Portfolio specifics").
 
@@ -24,7 +24,7 @@ Plain **pnpm workspaces**. Turborepo's remote caching and task graph pay off wit
 │   ├── shared/         # DTO types, zod schemas, enums, ordering utils (lexo-rank)
 │   └── config/         # shared eslint/tsconfig/prettier presets
 ├── prisma/             # schema.prisma + migrations (owned by apps/api, hoisted for tooling)
-├── docker/             # Dockerfiles, Caddyfile
+├── docker/             # Dockerfiles, traefik.yml (static config) + dynamic config
 ├── docker-compose.yml / docker-compose.prod.yml
 └── .github/workflows/
 ```
@@ -36,19 +36,19 @@ Plain **pnpm workspaces**. Turborepo's remote caching and task graph pay off wit
 - **Next.js web** — UI only. Talks to the API over REST (JSON) via a typed fetch client generated from shared types. No direct DB access from Next server components (one data path only; keeps auth/authz in one place).
 - **NestJS api** — all business logic, validation, authz, persistence. Serves REST + one SSE endpoint for realtime.
 - **PostgreSQL 16** — system of record.
-- **Redis 7** — three jobs: session/refresh-token denylist cache, rate-limit counters, pub/sub fan-out for SSE (so realtime survives running >1 api replica later).
-- **Caddy** — reverse proxy + TLS termination, single public entrypoint.
+- **Valkey 8** — three jobs: session/refresh-token denylist cache, rate-limit counters, pub/sub fan-out for SSE (so realtime survives running >1 api replica later). Valkey is the Linux Foundation fork of Redis 7.2 (BSD-3-Clause) and is Redis-protocol drop-in compatible — `ioredis` and BullMQ work unchanged. Chosen over Redis because Redis ≥ 7.4 is licensed RSALv2/SSPLv1 (8.x adds AGPLv3) — none of which fit the permissive-only policy (Appendix: Licensing).
+- **Traefik v3** — reverse proxy + TLS termination (built-in ACME/Let's Encrypt), security-header middlewares, single public entrypoint. MIT-licensed (see Appendix: Licensing).
 - **Attachments volume** — local disk behind a storage interface (§5).
 
 ```mermaid
 flowchart LR
-    B[Browser] -->|HTTPS| C[Caddy\nreverse proxy + TLS]
+    B[Browser] -->|HTTPS| C[Traefik v3\nreverse proxy + TLS]
     C -->|/ -> :3000| W[Next.js web]
     C -->|/api -> :4000| A[NestJS API]
     C -->|/api/events SSE| A
     W -->|server-side REST calls| A
     A -->|SQL via Prisma| P[(PostgreSQL 16)]
-    A -->|cache / rate-limit / pub-sub| R[(Redis 7)]
+    A -->|cache / rate-limit / pub-sub| R[(Valkey 8)]
     A -->|read/write files| V[/attachments volume/]
     subgraph VM [Single Docker Compose host]
         C
@@ -60,7 +60,7 @@ flowchart LR
     end
 ```
 
-No message broker, no microservices, no k8s. One API process handles 50 users with ease; background work (notification fan-out, activity log writes) runs in-process via a lightweight queue (BullMQ on the existing Redis) — [reversible: extract a worker container by changing compose, not code].
+No message broker, no microservices, no k8s. One API process handles 50 users with ease; background work (notification fan-out, activity log writes) runs in-process via a lightweight queue (BullMQ on the existing Valkey) — [reversible: extract a worker container by changing compose, not code].
 
 ---
 
@@ -72,7 +72,7 @@ One Nest module per product module; module boundaries mirror the ERD aggregate b
 
 | Module | Owns | Notes |
 |---|---|---|
-| `auth` | login/logout/refresh, password-reset tokens, guards, `IdentityProvider` abstraction | §4.3 — designed for Entra OIDC drop-in |
+| `auth` | login/logout/refresh, password-reset tokens, guards, multi-provider identity framework (`IdentityProvider` port, per-provider enable/disable, `user_identities`, break-glass CLI) | §4.3 — local + Lark toggleable; Entra OIDC drops in later |
 | `orgs` | organizations, memberships, org-level roles, invites (tokenized, expiring, revocable — spec A3) | Single-org install is the MVP reality, but model orgs anyway (cheap now, painful later) |
 | `teams` | teams, team membership | Grouping + default access scope for projects |
 | `projects` | projects, sections, project membership, status colors/icons | Section CRUD lives here (sections are project-scoped) |
@@ -82,7 +82,7 @@ One Nest module per product module; module boundaries mirror the ERD aggregate b
 | `notifications` | in-app notification inbox, SSE event stream | Consumes domain events; email deferred post-MVP; 90-day retention (spec F1) enforced by a nightly BullMQ purge job |
 | `search` | cross-entity search endpoint | MVP = `ILIKE`/`pg_trgm` prefix+substring on titles/names only (spec E2); module isolates the Phase-1 tsvector/full-text upgrade |
 | `activity` | activity_log write + per-task/project feed read | Append-only; written via domain events |
-| `core` (infrastructure) | Prisma service, Redis service, config, logging, health | No business rules ever |
+| `core` (infrastructure) | Prisma service, Valkey service, config, logging, health | No business rules ever |
 
 ### 2.2 Where business rules live
 
@@ -124,6 +124,7 @@ erDiagram
     users ||--o{ memberships : has
     memberships }o--|| users : "user"
     users ||--o{ password_reset_tokens : requests
+    users ||--o{ user_identities : "external identities"
     teams ||--o{ team_members : has
     users ||--o{ team_members : joins
     teams ||--o{ projects : owns
@@ -172,6 +173,13 @@ erDiagram
         text token_hash UK
         timestamptz expires_at
         timestamptz used_at "nullable"
+        timestamptz created_at }
+    user_identities { uuid id PK
+        uuid user_id FK
+        text provider "lark | entra (local auth uses users.password_hash)"
+        text subject "stable provider user id - UNIQUE(provider, subject)"
+        citext email_at_link "nullable - email seen at linking time"
+        jsonb provider_meta "nullable - e.g. lark tenant_key"
         timestamptz created_at }
     teams { uuid id PK
         uuid organization_id FK
@@ -269,6 +277,7 @@ Notes:
 - **Single assignee is schema-enforced** (PD-20): `tasks.assignee_id` is a nullable FK — one task, one assignee, per Principle 2 and spec C1. The earlier `task_assignees` M:N join is deleted; if Phase-N ever needs collaborators/followers, that is a *new* `task_followers` table with distinct semantics, not a widening of assignment.
 - **Subtasks** are a self-reference (`parent_task_id`). MVP allows **one level** of nesting (enforced in service, `CHECK` deferred) — matches Asana's practical usage, avoids recursive-query complexity in views.
 - **Invites and password-reset tokens** (spec A2/A3): tokens stored hashed (never plaintext), single-use, expiring (invites 14 d per spec A3, resets 1 h), revocable. Accepting an invite creates the `users` row + `memberships` row in one transaction.
+- **`user_identities` ships in the MVP schema** (empty until Lark goes live in week 7, D-020): one row per external identity, `UNIQUE (provider, subject)`. Enabling a provider is a deploy + env change, never a migration. Local auth stays on `users.password_hash` (nullable — a Lark-only user has no password).
 - **Dormant columns, explicitly inert**: `users.avatar_url` (initials-only in MVP, PD-34) and `projects.private` (defaults false; no authz branch, no RBAC row, no UI reads it — kept only to avoid a Phase-4 backfill migration, per the PD-25 ruling). CI greps assert no non-migration code references them.
 - **Multi-homing tasks across projects** (Asana feature) is explicitly **out of MVP**: task belongs to exactly one project. [one-way door softened: if ever needed, introduce a `task_projects` join and backfill — schema change but mechanical.]
 - `projects.current_status` is denormalized from the latest `project_status_updates` row (updated in the same transaction) so portfolio roll-up reads never join/aggregate status history.
@@ -319,29 +328,36 @@ All FKs get supporting indexes (Postgres does not auto-create them). Partial ind
 
 **Cursor-based** everywhere (`?cursor=…&limit=50`, default 50, max 200), cursor = opaque base64 of `(sort_key || created_at, id)`. Offset pagination is banned — it breaks under concurrent inserts, which is exactly the board use case. `meta.nextCursor` null-terminates.
 
-### 4.3 Auth: JWT sessions now, Entra ID OIDC later — the abstraction that makes it true
+### 4.3 Auth: a multi-provider framework — local + Lark, each independently toggleable; Entra ready (D-020)
 
-**MVP**: email + password (argon2id), short-lived access JWT (15 min, httpOnly Secure SameSite=Lax cookie) + rotating refresh token (7 days, httpOnly cookie, denylist in Redis on logout/rotation). No localStorage tokens (XSS).
+**Session model (provider-independent).** Whoever authenticates you, *we* mint the same first-party session: short-lived access JWT (15 min, httpOnly Secure SameSite=Lax cookie) + rotating refresh token (7 days, httpOnly cookie, denylist in Valkey on logout/rotation). No localStorage tokens (XSS). Guards, RBAC, SSE auth, and the frontend never learn which provider was used; provider tokens are consumed at login time only and never passed downstream.
 
-**The drop-in guarantee for post-MVP Entra ID** rests on three deliberate seams:
+**Provider framework (built in MVP Sprint 1; only the Lark implementation is deferred to week 7):**
 
-1. **`IdentityProvider` port.** The `auth` module defines one interface — `authenticate(credentials) → IdentityClaims { provider, subject, email, name }` — with `LocalPasswordProvider` as the only MVP implementation. Entra becomes `OidcProvider` implementing the same interface (authorization-code flow handled by `openid-client`); zero changes to session issuance, guards, or any downstream module.
-2. **Identity is separate from user.** `users.password_hash` is nullable, and account lookup goes through `(provider, subject)` resolution logic (MVP: provider='local', subject=email) isolated in one `IdentityService`. Adding a `user_identities (user_id, provider, subject)` table post-MVP is an additive migration; email-based account linking is a policy inside `IdentityService`.
-3. **Sessions are ours, not the IdP's.** Whoever authenticates you, *we* mint the same first-party session JWT. Guards, RBAC, SSE auth, and the frontend never learn which provider was used. Entra's tokens are consumed at login time only, never passed downstream.
+1. **`IdentityProvider` port.** One interface — `authenticate(input) → IdentityClaims { provider, subject, email, emailVerified, name }`. Implementations: `LocalPasswordProvider` (argon2id, MVP), `LarkOAuthProvider` (week 7, first post-MVP item), `EntraOidcProvider` (Phase 3 in delivery-plan numbering, via `openid-client`). Zero changes to session issuance, guards, or any downstream module per provider.
+2. **Per-provider enable/disable via environment config** — the owner's requirement:
+   - `AUTH_LOCAL_ENABLED` (default `true`) — email/password, invites, admin reset links.
+   - `AUTH_LARK_ENABLED` (default `false`) — requires `LARK_APP_ID` + `LARK_APP_SECRET`; `LARK_BASE_URL` defaults to `https://open.larksuite.com` (set the Feishu domain `https://open.feishu.cn` for CN tenants — same provider code, different base URL).
+   - **Boot validation fails fast** if zero providers are enabled, or an enabled provider is missing credentials — clear startup error, documented in the runbook.
+   - `GET /api/v1/auth/providers` returns the enabled set; the login page renders only what is enabled (password form, "Continue with Lark" button, or both). Toggling is config + restart, not a settings screen (an admin UI for this is Phase-4 polish at most).
+3. **Identity is separate from user.** External identities live in `user_identities (provider, subject — unique)`, in the MVP schema from day 1 (§3.1); `users.password_hash` is nullable. Resolution order in `IdentityService`: (a) `(provider, subject)` match → sign in; (b) else verified-email match to an existing **active** user → link the identity (recorded in `activity_log`) and sign in; (c) else apply the provisioning policy: `AUTH_LARK_PROVISIONING=invite_only` (default) rejects with "ask an admin for an invite" — `auto` JIT-creates a member, optionally fenced by `AUTH_ALLOWED_EMAIL_DOMAINS` and/or `LARK_ALLOWED_TENANT_KEY`.
+4. **Lockout safety (consequence of toggles).** Disabling local auth while Lark is misconfigured or down must never brick the install: a break-glass CLI on the VM (`node dist/cli auth-recover`) re-enables local auth and/or mints an admin password-reset link, bypassing HTTP entirely. Startup logs a warning if local auth is disabled and any active admin has no linked external identity. Documented in the runbook next to the restore drill.
 
-Consequence: SSO is an `auth`-module-only change plus a login-page button. Stated as an acceptance test now: "adding a provider touches only `apps/api/src/auth/**` and the login page."
+**`LarkOAuthProvider` specifics.** OAuth 2.0 authorization-code flow against the configured base domain: redirect to Lark's authorize endpoint with a session-bound `state` (CSRF); the callback exchanges the code server-side at Lark's OAuth token endpoint (client secret never leaves the API); profile fetched from the authen user-info endpoint. Stable subject = `union_id` (fallback `open_id`); `tenant_key` stored in `provider_meta` and optionally enforced. Note: the user's email is only present if the Lark app is granted the email scope in the Lark admin console — without it, email-based auto-linking is impossible and `invite_only` + explicit linking applies. Endpoints and scopes are configuration, so Lark (larksuite.com) and Feishu (feishu.cn) tenants use the same code path.
+
+**The drop-in guarantee** stays, now stated for all providers: adding or toggling a provider touches only `apps/api/src/auth/**` and the login page — kept honest by an acceptance test.
 
 ### 4.4 Realtime: SSE for MVP — [reversible]
 
-Decision: **Server-Sent Events**, one endpoint `GET /api/v1/events` (auth via session cookie), backed by Redis pub/sub. Client subscribes to the entities it has open (project board, task, notifications badge); events are thin (`{ type: "task.updated", taskId, projectId }`) and the client refetches — no state-sync protocol to design or debug.
+Decision: **Server-Sent Events**, one endpoint `GET /api/v1/events` (auth via session cookie), backed by Valkey pub/sub. Client subscribes to the entities it has open (project board, task, notifications badge); events are thin (`{ type: "task.updated", taskId, projectId }`) and the client refetches — no state-sync protocol to design or debug.
 
 Why not the alternatives, against a 6-week clock:
 - **Polling**: simplest, but 50 users × per-board polling gives worse UX (multi-second staleness) for barely less work than SSE — Nest supports SSE natively (`@Sse()`), so SSE is ~2 days.
-- **WebSocket**: bidirectional transport we don't need (all writes go through REST), plus gateway lifecycle, reconnect/backoff, and proxy config to get right. Deferred; if we ever need client→server streaming (live cursors, presence), the Redis pub/sub backbone already exists and the client swap is contained in one hook.
+- **WebSocket**: bidirectional transport we don't need (all writes go through REST), plus gateway lifecycle, reconnect/backoff, and proxy config to get right. Deferred; if we ever need client→server streaming (live cursors, presence), the Valkey pub/sub backbone already exists and the client swap is contained in one hook.
 
 Fallback: SSE auto-reconnects natively; on top we refetch-on-window-focus (React Query default), so a dropped stream degrades to slightly-stale, never wrong.
 
-**Build-order rule (PD-4, formalizing risk #4's mitigation as schedule):** SSE is the *last* Sprint-3 item, started only after board, portfolio roll-up, and notifications are demo-complete. Pre-agreed cut line: if week 5 opens with any red feature, SSE is dropped from MVP without a meeting and optimistic-update + refetch-on-focus ships as the realtime story (AC0.2 is satisfiable that way). The Redis pub/sub plumbing costs nothing to keep for a Phase-1 revival.
+**Build-order rule (PD-4, formalizing risk #4's mitigation as schedule):** SSE is the *last* Sprint-3 item, started only after board, portfolio roll-up, and notifications are demo-complete. Pre-agreed cut line: if week 5 opens with any red feature, SSE is dropped from MVP without a meeting and optimistic-update + refetch-on-focus ships as the realtime story (AC0.2 is satisfiable that way). The Valkey pub/sub plumbing costs nothing to keep for a Phase-1 revival.
 
 ### 4.5 API docs
 
@@ -386,14 +402,14 @@ These are comfortable on one 4 vCPU / 8 GB VM; we assert them in a Sprint-3 k6 r
 ### 6.3 Logging & observability — deliberately lean
 
 - **Structured JSON logs** (pino) from api and web, one line per request: `x-request-id`, user id, route, status, duration. `docker compose logs` + `jq` is the MVP log UI; ship to Loki later only if pain demands.
-- **Healthchecks**: `/healthz` (liveness) and `/readyz` (checks Postgres + Redis) on the API; Docker `HEALTHCHECK` on every service; Caddy serves a static status page if api is down.
+- **Healthchecks**: `/healthz` (liveness) and `/readyz` (checks Postgres + Valkey) on the API; Docker `HEALTHCHECK` on every service; Traefik serves a static maintenance page (errors middleware) if api is down.
 - **Error tracking**: self-hostable GlitchTip *or* just log-based for MVP — decision left to Sprint 3 slack; not on the critical path.
 - Explicitly **not** doing: metrics stack (Prometheus/Grafana), tracing, k8s. Revisit at >100 users.
 
 ### 6.4 Security
 
-- **OWASP basics**: argon2id password hashing; zod validation on every input; Prisma parameterization (no raw SQL except the roll-up aggregate and the trigram search query, both with bound params); httpOnly SameSite cookies + CSRF double-submit token on state-changing routes; security headers via Caddy (HSTS, X-Frame-Options DENY, CSP default-src 'self', nosniff); dependency audit in CI (`pnpm audit` + Dependabot).
-- **Rate limiting**: `@nestjs/throttler` on Redis — global 100 req/min/user, `POST /auth/login` 5/min/IP with exponential lockout, uploads 20/hour/user.
+- **OWASP basics**: argon2id password hashing; zod validation on every input; Prisma parameterization (no raw SQL except the roll-up aggregate and the trigram search query, both with bound params); httpOnly SameSite cookies + CSRF double-submit token on state-changing routes; security headers via Traefik middlewares (HSTS, X-Frame-Options DENY, nosniff) with CSP (`default-src 'self'`) set by the apps; OAuth callbacks protected by session-bound `state` (§4.3); dependency audit in CI (`pnpm audit` + Dependabot).
+- **Rate limiting**: `@nestjs/throttler` on Valkey — global 100 req/min/user, `POST /auth/login` 5/min/IP with exponential lockout (OAuth callback endpoints included), uploads 20/hour/user.
 - **Secrets**: `.env.prod` file on the VM, `chmod 600`, never in git (git-secrets hook in CI); rotated by redeploy. Docker/Swarm secrets are overkill for one VM [reversible].
 - **RBAC matrix (MVP)** — exactly **two org roles** (spec §2.1); "lead" is a persona, not a permission (PD-26); guest role is post-MVP. All projects are org-visible — no privacy in MVP (PD-25; the dormant `projects.private` column has no row here and no authz branch):
 
@@ -417,14 +433,14 @@ These are comfortable on one 4 vCPU / 8 GB VM; we assert them in a Sprint-3 k6 r
 
 | Service | Image | Notes |
 |---|---|---|
-| `caddy` | caddy:2 | 80/443 published; auto-TLS (Let's Encrypt) or internal CA for intranet-only; the **only** service with published ports |
+| `traefik` | traefik:v3 | 80/443 published; auto-TLS via built-in ACME (Let's Encrypt) or internal CA for intranet-only; `acme.json` on a volume; dashboard disabled in prod; the **only** service with published ports |
 | `web` | our Next.js image (multi-stage, standalone output) | |
 | `api` | our NestJS image (multi-stage, distroless-ish node:22-slim) | runs `prisma migrate deploy` as entrypoint step |
 | `postgres` | postgres:16 | volume `pgdata`; not exposed to host |
-| `redis` | redis:7 | AOF on; not exposed |
+| `valkey` | valkey/valkey:8 | AOF on; not exposed; Redis-protocol compatible (BSD-3) |
 | `backup` | postgres:16 + cron script | nightly pg_dump + attachment snapshot (§6.2) |
 
-**Caddy over Traefik** — [reversible]: two services and one static Caddyfile don't need Traefik's dynamic service discovery; Caddy's auto-TLS is zero-config and its config is readable by the whole team. Traefik earns its complexity only with many/ephemeral services.
+**Traefik over Caddy and nginx** — [reversible; revised per D-018]: the original draft chose Caddy for zero-config auto-TLS. The owner set a **permissive-license-only policy** for every shipped runtime component, to keep future commercialization unencumbered. For accuracy: Caddy v2 itself is Apache-2.0 (commercial use is permitted — the historical restriction applied to v1's official binaries), but Traefik is MIT, equally capable here (built-in ACME auto-TLS, header middlewares, native Docker provider), and swapping now removes any diligence-time discussion entirely. nginx (BSD-2) + certbot remains the maximally-boring fallback, at the cost of a second moving part (cert renewal + reload orchestration) — adopt it only if Traefik misbehaves. Config lives in `docker/traefik.yml` + one dynamic file; routing via container labels.
 
 ### 7.2 ORM: Prisma — [semi one-way door: switching ORMs mid-flight is expensive; chosen deliberately]
 
@@ -432,7 +448,7 @@ Prisma over TypeORM because: (1) schema-first with generated, actually-sound Typ
 
 ### 7.3 Environments
 
-- **dev**: `docker-compose.yml` runs postgres/redis only; web+api run on the host with hot reload (`pnpm dev`). Seed script creates demo org/projects/portfolio.
+- **dev**: `docker-compose.yml` runs postgres/valkey only; web+api run on the host with hot reload (`pnpm dev`). Seed script creates demo org/projects/portfolio.
 - **prod**: `docker-compose.prod.yml` (all six services), `.env.prod` for secrets, images built in CI and pulled by tag (git SHA) — the VM never builds.
 
 ### 7.4 Zero-to-running runbook (outline — full doc in `docs/runbook.md`)
@@ -440,7 +456,7 @@ Prisma over TypeORM because: (1) schema-first with generated, actually-sound Typ
 1. Provision VM (Ubuntu 24.04, 4 vCPU/8 GB/100 GB + backup disk); install Docker + compose plugin.
 2. DNS A record → VM; open 80/443 (intranet firewall rules as required).
 3. `git clone` repo (or copy release bundle); `cp .env.prod.example .env.prod`; fill secrets (`openssl rand` helpers documented).
-4. `docker compose -f docker-compose.prod.yml up -d` — api entrypoint runs migrations; Caddy obtains certs.
+4. `docker compose -f docker-compose.prod.yml up -d` — api entrypoint runs migrations; Traefik obtains certs via ACME.
 5. `docker compose exec api node dist/cli seed-admin` → first admin user.
 6. Verify `/readyz`, log in, create org. 7. Run restore drill once (§6.2). Target: **under 1 hour**.
 
@@ -457,13 +473,13 @@ Prisma over TypeORM because: (1) schema-first with generated, actually-sound Typ
 | Layer | Tooling | Mandatory in 6 weeks | Deferred |
 |---|---|---|---|
 | **Unit** | Vitest | Ordering utils (fractional index — exhaustive, incl. tie/rebalance), authz policies, roll-up calculators, IdentityService | Broad coverage targets — no % gate |
-| **Integration (API)** | Vitest + Testcontainers (real Postgres+Redis) | The contract per module: auth flows (login, invite accept, password reset), task CRUD + **move/reorder races**, portfolio roll-up + timeline query, RBAC matrix as a table-driven test (incl. any-member-can-post-status), pagination cursors | Notification fan-out edge cases |
+| **Integration (API)** | Vitest + Testcontainers (real Postgres+Valkey) | The contract per module: auth flows (login, invite accept, password reset, provider-toggle boot validation), task CRUD + **move/reorder races**, portfolio roll-up + timeline query, RBAC matrix as a table-driven test (incl. any-member-can-post-status), pagination cursors | Notification fan-out edge cases |
 | **E2E** | Playwright | **One smoke path**: login → create project → add sections/tasks → drag reorder → assign → comment+attach → create portfolio → see roll-up + timeline → status update appears | Cross-browser, visual regression, mobile |
 | **Load** | k6 | One Sprint-3 script: 100 VUs on board read + reorder + portfolio timeline, assert §6.1 | Sustained soak |
 
 Principles: integration tests against a **real** Postgres (Testcontainers) are the backbone — mocked-DB tests would miss exactly our risk areas (ordering, constraints, roll-up SQL). E2E stays at one smoke flow; it's a tripwire, not a spec.
 
-**CI (GitHub Actions)**, per PR (~6–8 min): lint + typecheck → unit → integration (services: postgres, redis) → build images → Playwright smoke against compose stack → `pnpm audit`. `main` builds and pushes release images. A scheduled weekly job runs `prisma migrate deploy` against a restored copy of the latest prod dump — migration + backup verification in one.
+**CI (GitHub Actions)**, per PR (~6–8 min): lint + typecheck → unit → integration (services: postgres, valkey) → build images → Playwright smoke against compose stack → `pnpm audit` → **license gate** (license-checker against the Appendix allowlist — a copyleft/source-available dependency fails the build). `main` builds and pushes release images. A scheduled weekly job runs `prisma migrate deploy` against a restored copy of the latest prod dump — migration + backup verification in one.
 
 ---
 
@@ -472,7 +488,7 @@ Principles: integration tests against a **real** Postgres (Testcontainers) are t
 | # | Risk | Likelihood / Impact | Mitigation |
 |---|---|---|---|
 | 1 | **Board ordering conflicts** — concurrent drags produce duplicate/exhausted fractional keys, items "jump" | Med / Med | Server-computed keys only (`/move` API); ties tolerated with deterministic tie-break; background rebalance; dedicated race-condition integration tests; SSE refresh makes the other client converge in <2 s |
-| 2 | **Portfolio timeline/roll-up query cost** — N projects × M tasks aggregates get slow or, worse, get built as N+1 in the app | Med / High (it's the differentiating feature) | Single SQL aggregate per portfolio (raw, indexed, tested with seeded 50-project/10k-task dataset in Sprint 2 — not Sprint 3); denormalized `projects.current_status`; k6 assertion < 500 ms; fallback: 60 s Redis cache on the roll-up read (one flag) |
+| 2 | **Portfolio timeline/roll-up query cost** — N projects × M tasks aggregates get slow or, worse, get built as N+1 in the app | Med / High (it's the differentiating feature) | Single SQL aggregate per portfolio (raw, indexed, tested with seeded 50-project/10k-task dataset in Sprint 2 — not Sprint 3); denormalized `projects.current_status`; k6 assertion < 500 ms; fallback: 60 s Valkey cache on the roll-up read (one flag) |
 | 3 | **Attachment storage growth / backup bloat** — volume outgrows disk or makes backups slow | Med / Med | 25 MB/file cap + per-org quota + admin usage view from day 1; attachments on separate mount; `StorageProvider` seam means MinIO/S3 migration is a copy script + config flip, no API change |
 | 4 | **Realtime scope creep** — SSE turns into a half-built state-sync layer eating Sprint 2/3 | High / High (timeline risk) | Events are notify-only (client refetches); hard scope: task/board/notification events only; polling-on-focus already works without SSE, so SSE can be cut in extremis without losing correctness |
 | 5 | **Single-VM data loss / failed restore** — backups exist but don't restore | Low / Critical | `pg_dump` + volume snapshot + off-VM sync (§6.2); restore drill pre-go-live and quarterly; weekly CI job restores latest dump and runs migrations against it — a corrupt backup is detected within 7 days, not at disaster time |
@@ -488,16 +504,61 @@ Watchlist (not top-5): Prisma raw-SQL drift on the two hand-written queries (cov
 | Monorepo tooling | pnpm workspaces (no Turborepo) | reversible |
 | ORM | Prisma | semi one-way |
 | Ordering | fractional indexing (lexo-rank strings) | reversible |
-| Auth | JWT cookie sessions + `IdentityProvider` port | designed for OIDC drop-in |
-| Realtime | SSE + Redis pub/sub, notify-then-refetch | reversible (WS later) |
-| Attachments | local volume behind `StorageProvider` | reversible (MinIO/S3) |
-| Proxy/TLS | Caddy | reversible |
+| Auth | JWT cookie sessions + multi-provider `IdentityProvider` framework; local + Lark independently toggleable via env; Entra later (D-020) | designed for provider drop-in |
+| Realtime | SSE + Valkey pub/sub, notify-then-refetch | reversible (WS later) |
+| Attachments | local volume behind `StorageProvider` | reversible (S3-compatible later — see licensing appendix re: MinIO) |
+| Proxy/TLS | Traefik v3 (MIT) — D-018 | reversible (nginx + certbot fallback) |
+| Cache/queue/pub-sub | Valkey 8 (BSD-3), Redis-protocol drop-in — D-019 | reversible |
+| License policy | permissive-only runtime stack, CI-gated allowlist — D-021 | policy (see licensing appendix) |
 | Multi-homing tasks | excluded from MVP | additive migration if needed |
 | Pagination | cursor-based only | one-way (good) |
 | IDs / URLs | UUIDv7 everywhere; web `/tasks/:id` + `?task=` overlay; no slugs | one-way (good) |
 | Task assignment | single nullable `assignee_id` FK (no M:N) | one-way by design (Principle 2) |
 | MVP search | `ILIKE`/`pg_trgm` on titles/names | reversible (tsvector in Phase 1) |
 | SSE scheduling | last Sprint-3 item, pre-agreed cut to refetch-on-focus | schedule rule (PD-4) |
+
+---
+
+## Appendix: Licensing & commercialization audit (D-018, D-019, D-021)
+
+**Policy (owner-set, 20 Jul 2026):** every component that ships as part of the Cairn runtime must carry a permissive license — MIT, BSD, Apache-2.0, ISC, PostgreSQL, OFL, CC0 class. No copyleft (GPL/AGPL), no source-available (SSPL, RSAL, BUSL, FSL, Elastic) in shipped components. Dev-only tooling that is never distributed with the product is exempt but tracked below. Enforced by a **CI license gate** (license-checker allowlist) so a stray transitive dependency fails the build instead of surfacing during due diligence.
+
+### Shipped runtime components — all permissive
+
+| Component | License | Note |
+|---|---|---|
+| Node.js | MIT-style | |
+| Next.js / React | MIT | |
+| NestJS | MIT | |
+| Prisma | Apache-2.0 | |
+| PostgreSQL 16 | PostgreSQL License (permissive) | |
+| **Valkey 8** | **BSD-3-Clause** | Replaces Redis (D-019); Redis-protocol drop-in — `ioredis`/BullMQ unchanged |
+| BullMQ / ioredis | MIT | |
+| **Traefik v3** | **MIT** | Replaces Caddy (D-018) |
+| zod | MIT | |
+| anime.js v4 | MIT | |
+| fractional-indexing | CC0 | |
+| Inter / JetBrains Mono | SIL OFL 1.1 | Embedding/bundling in a commercial product is permitted; the fonts themselves may not be sold standalone |
+| Docker Engine (on the VM) | Apache-2.0 | Server-side engine is unencumbered |
+
+### Deliberately avoided or swapped
+
+| Component | License problem | Our position |
+|---|---|---|
+| **Redis ≥ 7.4** | RSALv2 / SSPLv1 (8.x offers AGPLv3) — source-available/copyleft | Swapped to Valkey (D-019) |
+| **Caddy** | None in fact — v2 is Apache-2.0 (v1 binary licensing history caused the confusion) | Swapped to MIT Traefik anyway under the blanket policy (D-018) |
+| **MinIO** | AGPLv3 | If/when attachments outgrow the local volume: SeaweedFS (Apache-2.0) or a managed S3 bucket via the existing `StorageProvider` port — never MinIO |
+| **Sentry (server)** | FSL (source-available) | If error tracking is adopted: GlitchTip (MIT) per §6.3 |
+
+### Dev-only tooling (not distributed — exempt, tracked)
+
+| Tool | License | Note |
+|---|---|---|
+| k6 (load test) | AGPLv3 | Runs against the app from outside; never shipped. Swap to autocannon (MIT) if a zero-AGPL-anywhere policy is ever adopted |
+| Playwright / Vitest / pnpm / eslint | Apache-2.0 / MIT | Fine |
+| Docker Desktop (dev laptops) | Paid tier for large orgs (>250 employees & >$10M revenue) | Engine/CLI on Linux is Apache-2.0; irrelevant at current size — noted for the commercialization file |
+
+**If Cairn itself is commercialized:** with the stack above fully permissive, Cairn's own license is unconstrained — proprietary, dual-license, or open-core all remain open. Keep this appendix current (the CI gate keeps dependencies honest; review it at each phase gate).
 
 ---
 

@@ -5,8 +5,8 @@ The single source of truth for project decisions (delivery plan §4). Format: nu
 | # | Date | Decision | Context | Owner | Docs | Status |
 |---|---|---|---|---|---|---|
 | D-001 | 2026-07-20 | Build our own tool instead of buying | Benchmark of 9 tools: portfolio layer is universally the premium upsell; Asana Advanced = $625/mo at 25 seats | Owner | pm-tool-benchmark/ | Ratified |
-| D-002 | 2026-07-20 | Stack: TypeScript end-to-end — Next.js, NestJS, PostgreSQL 16, Redis 7, pnpm workspaces | One language, small team maintainability | Owner + Tech Lead | 02 | Ratified |
-| D-003 | 2026-07-20 | Hosting: Docker Compose on self-controlled VM; Caddy for proxy/TLS | Simplest to self-manage; host-agnostic | Owner + Tech Lead | 02 | Ratified |
+| D-002 | 2026-07-20 | Stack: TypeScript end-to-end — Next.js, NestJS, PostgreSQL 16, Redis 7, pnpm workspaces | One language, small team maintainability | Owner + Tech Lead | 02 | Ratified; Redis superseded by D-019 |
+| D-003 | 2026-07-20 | Hosting: Docker Compose on self-controlled VM; Caddy for proxy/TLS | Simplest to self-manage; host-agnostic | Owner + Tech Lead | 02 | Ratified; proxy superseded by D-018 |
 | D-004 | 2026-07-20 | Timeline: 6-week MVP (3×2-week sprints) incl. core work mgmt AND portfolio layer; 4-week pilot | Aggressive by choice; scope cut accordingly (PD-1) | Owner | 01, 04 | Ratified |
 | D-005 | 2026-07-20 | Working name: **Cairn** | PD-42; repo/monorepo name `cairn` | Project Director | all | Ratified |
 | D-006 | 2026-07-20 | Task detail = side-peek drawer (not modal); fixed 520px | Asana's best interaction; keeps list context | Designer | 01 C1, 03 §4.c | Ratified |
@@ -21,5 +21,9 @@ The single source of truth for project decisions (delivery plan §4). Format: nu
 | D-015 | 2026-07-20 | MVP ships light theme only; token architecture stays dark-ready | PD-6 | Designer | 03 §2.1 | Ratified |
 | D-016 | 2026-07-20 | Scope-change rule: nothing enters MVP without a PD-signed entry here AND an equal-effort cut (one-in-one-out); feature freeze Fri 21 Aug | PD-39/PD-40 | Project Director | 04 §4 | Ratified |
 | D-017 | 2026-07-20 | Full PMO review PD-1…PD-42 dispositions | See review-pmo.md and each doc's disposition appendix | Project Director | all | Retro-logged |
+| D-018 | 2026-07-20 | Reverse proxy: **Traefik v3 (MIT)** replaces Caddy | Owner wants zero license ambiguity for possible future commercialization; Caddy v2 is in fact Apache-2.0, swapped anyway under the blanket permissive-only policy; nginx+certbot is the named fallback | Owner + Tech Lead | 02, 04 | Ratified (supersedes D-003 proxy choice) |
+| D-019 | 2026-07-20 | Cache/queue: **Valkey 8 (BSD-3)** replaces Redis | Redis ≥7.4 is RSALv2/SSPLv1 (8.x adds AGPLv3) — not permissive; Valkey is the Redis-protocol drop-in fork (ioredis/BullMQ unchanged) | Tech Lead | 02, 04 | Ratified (supersedes D-002 Redis choice) |
+| D-020 | 2026-07-20 | Auth: multi-provider framework with per-provider enable/disable (env-config) — local email/password + **Lark sign-in** (Lark/Feishu via configurable base URL); Entra later. Framework + toggles + `user_identities` + break-glass CLI in MVP Sprint 1; **Lark provider ships week 7** (first post-MVP item, during the pilot), keeping Sprint-3 hardening slack intact | Owner requirement + owner-chosen timing (20 Jul) | Owner + Tech Lead | 01, 02, 04 | Ratified |
+| D-021 | 2026-07-20 | License policy: shipped runtime components must be permissive (MIT/BSD/Apache/ISC/PostgreSQL/OFL/CC0); no GPL/AGPL/SSPL/RSAL/BUSL/FSL in shipped components; dev-only tools exempt but tracked; enforced by a CI license-allowlist gate | Keep commercialization unencumbered; audit table in arch licensing appendix | Owner | 02 | Ratified |
 
 Open items being tracked: SMTP availability on the VM (IT, due end of week 1) · the two pilot programs (PD, due week-5 checkpoint).

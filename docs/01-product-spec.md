@@ -32,7 +32,7 @@ We copy Asana's **semantics**, not its surface area:
 2. **One task, one assignee, one due date.** We keep Asana's opinionated task model. Ambiguity about who owns a thing is the #1 failure mode of ops teams; the tool refuses to create it. (Collaborators can follow a task; only one person is *responsible*.)
 3. **Status is a habit, not a report.** A project status update takes < 60 seconds to post and is the single source of truth that rolls up to the portfolio. The tool optimizes for the weekly cadence: prompt, prefill, one-click color.
 4. **Boring, fast, obvious.** General-ops users, not power users. Every screen answerable in one glance; no configuration required before first use; list view keyboard-friendly; page loads < 1s on our own VM.
-5. **Own the data, own the runtime.** Everything runs in Docker Compose on our VM. No feature may depend on a third-party SaaS to function. Exportable data (JSON/CSV) is a feature, not an afterthought.
+5. **Own the data, own the runtime.** Everything runs in Docker Compose on our VM. No feature may depend on a third-party SaaS to function — optional integrations (e.g. Lark sign-in) stay optional: each can be disabled and the tool remains fully usable. Every shipped component carries a permissive license (MIT/BSD/Apache class, D-021) so a future decision to commercialize Cairn is unencumbered. Exportable data (JSON/CSV) is a feature, not an afterthought.
 
 ### 1.4 Working name
 
@@ -151,7 +151,7 @@ As any user, I want to sign in with email + password, so that access is controll
 - AC: Passwords ≥ 10 chars, stored hashed (argon2/bcrypt — Tech Lead's call). Sessions persist across browser restarts ("stay signed in" default on, 30-day session).
 - AC: Login rate-limited (5 failures → 15-min lockout per account+IP).
 - AC: "Forgot password" = admin-performed reset in MVP (admin generates a reset link from the Members page). No SMTP dependency required for the MVP to function. If SMTP is configured (env vars), invite + reset emails send automatically.
-- Note: Entra ID SSO is Phase 2 (locked roadmap). Tech Lead: keep an identity abstraction so adding OIDC doesn't touch the user model.
+- Note (revised, D-020): authentication is a **pluggable provider framework with per-provider enable/disable** (env config, validated at boot — the install refuses to start with zero providers enabled): local email/password (`AUTH_LOCAL_ENABLED`, default on) and **Lark sign-in** (`AUTH_LARK_ENABLED`, default off). The framework, toggles, and identity table ship inside the MVP; the Lark provider itself ships **immediately after the MVP (week 7, during the pilot, behind its toggle)**. Entra ID OIDC follows as a third provider in Phase 2 (locked roadmap). The login page renders only enabled providers; a break-glass CLI on the VM prevents admin lockout when local auth is disabled. Tech Lead owns the seam (arch §4.3).
 
 **A3. Invites.**
 As an admin, I want to invite teammates by email, so that the team gets in without me creating passwords.
@@ -299,7 +299,8 @@ Locked roadmap phases: **Phase 1** dashboards/reporting → **Phase 2** Entra ID
 | Rich text (descriptions, comments, status bodies) | Phase 1 | MVP = plain text + auto-linked URLs everywhere (PD-8) |
 | Timeline drag-editing (bar move/resize), zoom presets | Phase 1 | MVP timeline = read-only bars, fixed month zoom (PD-2) |
 | CSV/JSON export UI (general) | Phase 1 | **Exception — MVP stretch (PD-11): one endpoint, "Export portfolio roll-up table as CSV", reusing the D2 query; first claim on Sprint-3 slack (~0.5 day)** |
-| Entra ID SSO (OIDC/SAML), SCIM deprovisioning | Phase 2 | MVP = email/password + invites only |
+| Lark sign-in (OAuth, toggleable via `AUTH_LARK_ENABLED`) | Week 7 — first post-MVP item (D-020) | Provider framework + toggles + identity table ship inside the MVP; only the Lark provider itself is deferred; supports Lark and Feishu tenants via configurable base URL |
+| Entra ID SSO (OIDC/SAML), SCIM deprovisioning | Phase 2 | MVP = email/password + invites only; multi-provider framework ready (Lark proves the seam in week 7) |
 | Teams app/tabs/bot, Outlook add-in, email notifications, calendar sync | Phase 2 | Benchmark M365 specifics are the blueprint |
 | Forms (intake), rules/automation, recurring tasks, status-update reminders | Phase 3 | Staleness chip (D2) is the MVP stand-in for reminders |
 | Task dependencies & cross-project dependencies, milestones, critical path, baselines | Phase 3 | Biggest deliberate cut; portfolio timeline ≠ Gantt |
