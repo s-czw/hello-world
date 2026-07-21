@@ -87,7 +87,7 @@ Dependency spine (honored below): **schema + auth + design tokens → list view 
 
 | Who | Backlog (spec IDs) |
 |---|---|
-| **Tech Lead** (~5d) | Monorepo scaffold + CI pipeline (lint/type/unit/integration/build/smoke, arch §8) · dev + **staging** compose stacks (staging must exist by end of week 1 — DoD depends on it) · Prisma schema v1 + migrations + seed script (arch §3, incl. dormant-column CI greps) · **A1** first-run org creation · **A2** email/password auth, sessions, rate limiting, multi-provider identity framework (provider enable/disable toggles + boot validation, `user_identities` table, break-glass CLI — arch §4.3, D-020) |
+| **Tech Lead** (~5d) | Polyglot monorepo scaffold (pnpm web + Maven Spring Boot api) + two-lane CI (`mvn verify` / web build / smoke / OpenAPI-client drift / license gate, arch §8) · dev + **staging** compose stacks (staging must exist by end of week 1 — DoD depends on it) · Flyway schema v1 + jOOQ codegen + seed script (arch §3, incl. RLS policies + GUC hook, dormant-column CI greps) · **A1** first-run org creation · **A2** email/password auth (Spring Security), sessions, rate limiting, multi-provider identity framework (provider toggles + boot validation, `user_identities`, break-glass CLI — arch §4.3, D-020) |
 | **Product Engineer** (~9d) | **B1** teams (1d) · **B2** projects + sections + templates + sample project (2d) · **B3** list view — fixed 5 columns, section grouping, inline edit, drag + "Move to…" menu, quick-add (4d) · **C1** task CRUD + side-peek panel + `/tasks/:id` routing (2d) |
 | **Designer** | Day 1–2: `tokens.css` + vendored fonts (PE unblocked immediately) · component specs batch 1 · week 2: screen specs for app frame/sidebar, list view, side peek, My Tasks incl. nudge block · empty-state copy v1 · first Tue/Thu in-app reviews |
 | **Project Director** | `docs/decisions.md` + `docs/definition-of-done.md` live day 1 (retro-log all PD rulings) · SMTP answer from IT (spec open Q2, end of week 1) · ceremonies stood up · confirm PE's D5 sizing (≤1d or cut) logged by Friday 24 Jul |
@@ -185,7 +185,7 @@ Merged: Tech Lead's technical register (arch §9) + PMO delivery risks. Reviewed
 | R9 | **Cross-tenant data leak** — the SaaS-killing defect class (arch risk #6) | TL | Low / **Critical** | Double-wall isolation (app filter + RLS); isolation suite + layer-1 bug drill on every PR; CI blocks migrations adding tables without RLS policies; launch criterion 9 | Any isolation test fails or the smoke finds a leak → release blocked, no exceptions; in production: freeze deploys, incident review before the next release |
 | R10 | **Re-architecture eats the runway** — RLS/PgBouncer/S3/tenancy work (~+5 TL days, D-022) squeezes an already-tight plan; RLS×PgBouncer GUC interaction is the known trap | PD | Med / **High** | Deltas explicitly costed in the §1 re-baseline; stretch ladder pre-cancelled; week 6 stays feature-free; GUC-per-transaction covered in the isolation suite from Sprint 1 | Sprint-1 exit misses schema+RLS+auth done → PD invokes one-in-one-out against remaining scope (next candidates, pre-agreed order: subtasks C2 → notifications inbox UI F1-UI, rows keep writing) |
 
-Watchlist (not top-10, reviewed monthly): Prisma raw-SQL drift on the two hand-written queries (integration-tested); framework version churn (pin minors, upgrade between sprints); auth-seam erosion (arch §4.3 acceptance test); attachment storage growth (per-org quota + admin view from day 1); RLS+PgBouncer GUC discipline (arch §9 watchlist).
+Watchlist (not top-10, reviewed monthly): jOOQ codegen ↔ Flyway drift (build regenerates); framework version churn (Next.js / Spring Boot — pin, upgrade between sprints); auth-seam erosion (arch §4.3 acceptance test); attachment storage growth (per-org quota + admin view from day 1); RLS+PgBouncer GUC discipline (arch §9 watchlist); OpenAPI-client drift (CI regenerate-and-diff).
 
 ---
 
@@ -195,7 +195,7 @@ Numbering note: this plan counts the MVP as Phase 1, so spec §5's "Phase 1/2/3/
 
 **No phase starts before its decision gate passes — each gate is a PD-chaired review logged in `docs/decisions.md`.**
 
-**Pilot-window exception (weeks 7–8, D-020):** exactly one build item runs during the pilot — the **Lark OAuth provider** (owner decision), deployed mid-pilot behind `AUTH_LARK_ENABLED` on the multi-provider framework the MVP already ships. ~2–2.5 days, touches only `apps/api/src/auth/**` + the login page (the arch §4.3 acceptance test). Everything else waits for the Phase-2 gate.
+**Pilot-window exception (weeks 7–8, D-020):** exactly one build item runs during the pilot — the **Lark OAuth provider** (owner decision), deployed mid-pilot behind `AUTH_LARK_ENABLED` on the multi-provider framework the MVP already ships. ~2–2.5 days, touches only the api's `auth` module + the login page (the arch §4.3 acceptance test). Everything else waits for the Phase-2 gate.
 
 ### Phase 2 — Dashboards & reporting (spec "Phase 1") — ~3 sprints (6 weeks)
 - **Headline:** **D-022 restorations first** — portfolio bar timeline (bars on a month axis, today line, tray), portfolio-level status (D5), Ctrl+K search, project templates, CSV export, SSE realtime — then dashboards/charts over projects & portfolios; custom fields (text/number/select, on the field-registry pattern the MVP priority field established); filters + saved views; full-text search (tsvector on descriptions/comments); rich text (descriptions, comments, status bodies); timeline drag-edit + zoom presets (the PD-2 backlog); polish backlog (vanity slugs, command-palette verbs, dark theme).
@@ -221,8 +221,8 @@ Numbering note: this plan counts the MVP as Phase 1, so spec §5's "Phase 1/2/3/
 
 | Layer | Tooling | MVP-mandatory scope |
 |---|---|---|
-| Unit | Vitest | Fractional-index ordering (exhaustive incl. ties/rebalance), authz policies, roll-up calculators, IdentityService |
-| Integration | Vitest + Testcontainers (real Postgres + Valkey) | Per-module contracts: auth flows (login, invite accept, reset), task CRUD + move/reorder **races**, roll-up + timeline queries, RBAC matrix as a table-driven test (incl. any-member-can-post-status), pagination cursors |
+| Unit | JUnit 5 | Fractional-index ordering (exhaustive incl. ties/rebalance), authz policies, roll-up calculators, IdentityService |
+| Integration | JUnit 5 + Testcontainers (real Postgres + Valkey) + MockMvc | Per-module contracts: auth flows (login, invite accept, reset), task CRUD + move/reorder **races**, roll-up + timeline queries, RBAC matrix as a parameterized test (incl. any-member-can-post-status), pagination cursors, **tenant-isolation suite + layer-1 bug drill** |
 | E2E | Playwright | **One smoke path** (tripwire, not a spec): login → create project → sections/tasks → drag reorder → assign → comment + attach → create portfolio → roll-up + timeline → status update appears |
 | Load | k6 | One Sprint-3 run: 100 VUs on board read + reorder + portfolio timeline; assert arch §6.1 targets |
 

@@ -1,6 +1,6 @@
 # Architecture — Self-Hosted Program & Project Management Tool
 
-**Author:** Tech Lead · **Date:** 20 July 2026 · **Status:** v3.0 — owner-requested re-architecture for **multi-tenant SaaS** (D-022): live multi-org tenancy, Postgres RLS isolation, S3-compatible storage in prod, per-org quotas, PgBouncer, worker container, metrics, scale-tier roadmap (§10) — funded by MVP scope cuts per D-022; ship date unchanged. Supersedes v2.1 (permissive-license stack, Traefik/Valkey, multi-provider auth D-018…D-021 — all retained). Base: pending spec v1.2 sign-off (sign-off order per PD-38)
+**Author:** Tech Lead · **Date:** 21 July 2026 · **Status:** v3.1 — owner-directed stack change: **API is Java / Spring Boot** (D-026), replacing NestJS. Web stays Next.js; the shared-zod contract becomes an OpenAPI-generated one; data layer is jOOQ (Apache-2.0, not Hibernate/LGPL); worker is the same Spring jar under a `worker` profile. Retains v3.0 (multi-tenant SaaS, RLS, S3, PgBouncer, scale tiers §10 — D-022…D-024) and v2.1 (Traefik/Valkey, multi-provider auth, permissive-license policy — D-018…D-021).
 **Scope:** MVP (6 weeks, 3×2-week sprints) for 10–50 users, self-hosted Docker Compose.
 **Product model:** Asana-style — projects/tasks/sections/boards **plus** a portfolio layer (roll-ups, portfolio timeline), which is exactly the gap that ruled out most benchmarked competitors (see `pm-tool-benchmark/research-notes.md`, Asana "Portfolio specifics").
 
@@ -10,33 +10,30 @@ Guiding principle: **boring, proven choices**; every decision below is tagged **
 
 ## 1. Architecture overview
 
-### 1.1 Monorepo: pnpm workspaces (no Turborepo) — [reversible]
+### 1.1 Polyglot monorepo: one git repo, two build systems — [reversible]
 
-Plain **pnpm workspaces**. Turborepo's remote caching and task graph pay off with many packages and many contributors; we have 2 builders (Product Engineer + Tech Lead), ~4 packages, and CI runs that will finish in minutes anyway. Adding Turborepo later is a one-file change (`turbo.json`) — deferring it costs nothing.
+One repository, two toolchains side by side: the web app is a **pnpm** project, the API is a **Maven** project (Java 21 LTS). No cross-language build tool ties them (Nx/Bazel would be over-engineering for two builders) — CI runs the two build lanes independently. The contract between them is the OpenAPI spec, not shared source (§1.3).
 
 ```
 /
-├── package.json / pnpm-workspace.yaml
 ├── apps/
-│   ├── web/            # Next.js (App Router, React)
-│   └── api/            # NestJS
+│   ├── web/            # Next.js (App Router, React) — pnpm
+│   └── api/            # Spring Boot (Java 21) — Maven; src/main/java, Flyway migrations
 ├── packages/
-│   ├── shared/         # DTO types, zod schemas, enums, ordering utils (lexo-rank)
-│   └── config/         # shared eslint/tsconfig/prettier presets
-├── prisma/             # schema.prisma + migrations (owned by apps/api, hoisted for tooling)
+│   └── api-client/     # GENERATED TypeScript client + types (from apps/api's OpenAPI) — pnpm
 ├── docker/             # Dockerfiles, traefik.yml (static config) + dynamic config
 ├── docker-compose.yml / docker-compose.prod.yml
 └── .github/workflows/
 ```
 
-`packages/shared` is the contract between web and api: request/response types and zod schemas are defined once and imported by both — this is our cheap insurance against front/back drift on an aggressive timeline.
+**Java, not Kotlin** (owner said Java). **Maven, not Gradle** — the more boring/stable default, consistent with the "boring proven choices" principle; a Maven multi-module POM under `apps/api` splits the modules of §2.1.
 
 ### 1.2 Components and communication
 
-- **Next.js web** — UI only. Talks to the API over REST (JSON) via a typed fetch client generated from shared types. No direct DB access from Next server components (one data path only; keeps auth/authz in one place).
-- **NestJS api** — all business logic, validation, authz, persistence. Serves REST + one SSE endpoint for realtime.
+- **Next.js web** — UI only. Talks to the API over REST (JSON) via the **generated `api-client`** (§1.3). No direct DB access from Next server components (one data path only; keeps auth/authz in one place).
+- **Spring Boot api (Java 21)** — all business logic, validation, authz, persistence. Serves REST + one SSE endpoint for realtime. Spring Web MVC on an embedded server (Tomcat default; Undertow if we want lighter threads later — reversible).
 - **PostgreSQL 16** — system of record.
-- **Valkey 8** — three jobs: session/refresh-token denylist cache, rate-limit counters, pub/sub fan-out for SSE (so realtime survives running >1 api replica later). Valkey is the Linux Foundation fork of Redis 7.2 (BSD-3-Clause) and is Redis-protocol drop-in compatible — `ioredis` and BullMQ work unchanged. Chosen over Redis because Redis ≥ 7.4 is licensed RSALv2/SSPLv1 (8.x adds AGPLv3) — none of which fit the permissive-only policy (Appendix: Licensing).
+- **Valkey 8** — three jobs: session/refresh-token denylist cache, rate-limit counters, pub/sub fan-out for SSE (so realtime survives running >1 api replica later). Valkey is the Linux Foundation fork of Redis 7.2 (BSD-3-Clause), Redis-protocol compatible — reached from Java via **Spring Data Redis / Lettuce** (both permissive), and used as the job queue via **Redisson** (Apache-2.0). Chosen over Redis because Redis ≥ 7.4 is RSALv2/SSPLv1 (8.x adds AGPLv3), none of which fit the permissive-only policy (Appendix: Licensing).
 - **Traefik v3** — reverse proxy + TLS termination (built-in ACME/Let's Encrypt), security-header middlewares, single public entrypoint. MIT-licensed (see Appendix: Licensing).
 - **Attachments volume** — local disk behind a storage interface (§5).
 
@@ -44,10 +41,10 @@ Plain **pnpm workspaces**. Turborepo's remote caching and task graph pay off wit
 flowchart LR
     B[Browser] -->|HTTPS| C[Traefik v3\nreverse proxy + TLS]
     C -->|/ -> :3000| W[Next.js web]
-    C -->|/api -> :4000| A[NestJS API]
+    C -->|/api -> :8080| A[Spring Boot API - Java 21]
     C -->|/api/events SSE| A
     W -->|server-side REST calls| A
-    A -->|SQL via Prisma| P[(PostgreSQL 16)]
+    A -->|SQL via jOOQ| P[(PostgreSQL 16)]
     A -->|cache / rate-limit / pub-sub| R[(Valkey 8)]
     A -->|read/write files| V[/attachments volume/]
     subgraph VM [Single Docker Compose host]
@@ -60,41 +57,50 @@ flowchart LR
     end
 ```
 
-No message broker, no microservices, no k8s at tier T0/T1 (§10). Background work (notification fan-out, activity-log writes, retention purges, quota watermarks) runs via BullMQ on the existing Valkey in a **dedicated `worker` container from day 1 (D-022)** — same image as the api, different entrypoint — so api replicas stay stateless request-servers and scaling either side is a compose/orchestrator knob, not a refactor.
+No message broker, no microservices, no k8s at tier T0/T1 (§10). Background work (notification fan-out, activity-log writes, retention purges, quota watermarks) runs via a **Redisson-backed reliable queue on the existing Valkey**, consumed by a **dedicated `worker` container from day 1 (D-022)** — the *same Spring Boot jar* launched with the `worker` profile (no HTTP listener; scheduled jobs via Spring `@Scheduled`) — so api replicas stay stateless request-servers and scaling either side is a compose/orchestrator knob, not a refactor.
+
+### 1.3 The web↔api contract: OpenAPI-generated, not shared source (D-026)
+
+With a Java API and a TypeScript web app there is no shared-source layer, so the NestJS-era "one zod schema imported by both" pillar is replaced by an **OpenAPI-first contract**, honestly a touch weaker (one source, generated clients — not one runtime object):
+
+- The Spring API is the source of truth. `springdoc-openapi` (Apache-2.0) emits the OpenAPI 3 spec from the controllers + DTOs at build time.
+- CI generates `packages/api-client` (typed TS fetch client + request/response types) from that spec via `openapi-typescript` + a typed client. The web app imports it exactly like the old shared types.
+- **Drift is caught in CI**, not at runtime: a build fails if the committed client is stale versus the freshly-generated spec (regenerate-and-diff check). This is the replacement for compile-time cross-stack safety.
+- Validation is now two definitions: **Jakarta Bean Validation** annotations on the Java DTOs (server, authoritative) and the generated types + light client-side checks on the web. The server is always the enforcing side; the client copy is a UX convenience.
 
 ---
 
-## 2. Application architecture (NestJS)
+## 2. Application architecture (Spring Boot)
 
 ### 2.1 Module decomposition
 
-One Nest module per product module; module boundaries mirror the ERD aggregate boundaries.
+One Maven module (or one Spring `@Configuration`-bounded package) per product module; boundaries mirror the ERD aggregate boundaries. Spring's DI container plays the role NestJS modules did.
 
 | Module | Owns | Notes |
 |---|---|---|
-| `auth` | login/logout/refresh, password-reset tokens, guards, multi-provider identity framework (`IdentityProvider` port, per-provider enable/disable, `user_identities`, break-glass CLI) | §4.3 — local + Lark toggleable; Entra OIDC drops in later |
+| `auth` | login/logout/refresh, password-reset tokens, Spring Security filter chain, multi-provider identity framework (`IdentityProvider` port, per-provider enable/disable, `user_identities`, break-glass CLI) | §4.3 — local + Lark toggleable; Entra OIDC drops in later |
 | `orgs` | organizations (tenants), memberships, org-level roles, invites (tokenized, expiring, revocable — spec A3), org lifecycle (create/suspend), org switcher context | **Multi-tenant from MVP day 1 (D-022):** many orgs per deployment; org creation gated by `SIGNUP_MODE=closed\|invite\|open` (closed for the pilot); our own org is simply tenant #1 |
 | `teams` | teams, team membership | Grouping + default access scope for projects |
 | `projects` | projects, sections, project membership, status colors/icons | Section CRUD lives here (sections are project-scoped) |
 | `tasks` | tasks, subtasks, assignees, ordering, due dates | The hot path; owns lexo-rank reordering logic |
 | `portfolios` | portfolios, portfolio_projects, project_status_updates, timeline query | Roll-up read models live here, not in `projects` |
 | `collab` | comments, attachments | Attachments use `StorageProvider` (§5) |
-| `notifications` | in-app notification inbox, SSE event stream | Consumes domain events; email deferred post-MVP; 90-day retention (spec F1) enforced by a nightly BullMQ purge job |
+| `notifications` | in-app notification inbox, SSE event stream | Consumes domain events; email deferred post-MVP; 90-day retention (spec F1) enforced by a nightly `@Scheduled` purge job in the worker |
 | `search` | cross-entity search endpoint | MVP = `ILIKE`/`pg_trgm` prefix+substring on titles/names only (spec E2); module isolates the Phase-1 tsvector/full-text upgrade |
 | `activity` | activity_log write + per-task/project feed read | Append-only; written via domain events |
-| `core` (infrastructure) | Prisma service, Valkey service, config, logging, health | No business rules ever |
+| `core` (infrastructure) | jOOQ `DSLContext` config, Valkey/Redisson clients, tenant-context filter (sets the RLS GUC), config, logging, health | No business rules ever |
 
 ### 2.2 Where business rules live
 
 - **Domain services** (`tasks/task.service.ts` etc.) hold all business rules: "completing a parent task does not auto-complete subtasks", "a project must belong to exactly one team", "a status update is project-level and any org member may post one" (spec §2.1 two-role model — corrected per PD-26). Controllers are thin: parse → authorize → delegate → shape response.
-- **Cross-module communication** is via Nest's `EventEmitter2` domain events (`task.completed`, `comment.created`, `project.status_updated`). `notifications` and `activity` are pure consumers — no module imports another module's service except through its public exports. This keeps the 6-week codebase decoupled without inventing a bus.
-- **Transactions**: any multi-table write (task move + reorder, status update + activity) is one Prisma transaction inside the owning service.
+- **Cross-module communication** is via Spring's `ApplicationEventPublisher` domain events (`task.completed`, `comment.created`, `project.status_updated`); durable fan-out (notifications) hops onto the Redisson queue so it survives a crash. `notifications` and `activity` are pure consumers — no module reaches into another's internals, only its public service interface. Decoupled without inventing a bus.
+- **Transactions**: any multi-table write (task move + reorder, status update + activity) is one `@Transactional` unit in the owning service; the tenant GUC is set `SET LOCAL` within that same transaction (§2.3).
 
 ### 2.3 Validation strategy
 
-- **Edge validation**: zod schemas in `packages/shared`, enforced by a Nest `ZodValidationPipe` (global). The same schemas validate forms client-side — one definition, two enforcement points.
+- **Edge validation**: **Jakarta Bean Validation** (`@Valid` + constraints) on the request DTOs, enforced by Spring at the controller boundary (authoritative). The web reuses the generated types plus light client-side checks for UX — the server always re-validates (§1.3).
 - **Invariant validation**: DB constraints (FKs, `CHECK`, unique indexes) are the last line — e.g. unique `(project_id, portfolio_id)` in `portfolio_projects`. Never trust the app layer alone.
-- **Authz**: `PoliciesGuard` per route checks role from membership tables (§6 RBAC matrix), always scoped to the request's tenant. **Tenant isolation is double-walled (D-023, reverses the v2 "RLS is overkill" call now that this is a multi-tenant SaaS):** (1) every query filters by `organization_id` in application code, and (2) **Postgres row-level security** on every tenant-owned table — the API sets `app.current_org_id` (a session GUC) per request/transaction after membership verification, and RLS policies refuse rows from any other tenant. A bug in layer 1 becomes an empty result, never a cross-tenant leak. RLS policies live in migrations and are covered by a dedicated isolation test suite (§8).
+- **Authz**: a Spring Security filter chain authenticates the session; method-level checks (`@PreAuthorize` / a small policy service) enforce the §6 RBAC matrix, always scoped to the request's tenant. **Tenant isolation is double-walled (D-023, reverses the v2 "RLS is overkill" call now that this is a multi-tenant SaaS):** (1) every jOOQ query filters by `organization_id` in application code, and (2) **Postgres row-level security** on every tenant-owned table — a servlet filter resolves the caller's org, and a transaction-synchronized hook issues `SET LOCAL app.current_org_id = ?` at the start of each transaction (transaction-scoped, so it is **PgBouncer-safe** in transaction-pooling mode); RLS policies refuse rows from any other tenant. A bug in layer 1 becomes an empty result, never a cross-tenant leak. RLS policies live in Flyway migrations and are covered by a dedicated isolation test suite (§8).
 
 ### 2.4 Error model
 
@@ -107,7 +113,7 @@ RFC 9457 problem-details JSON, one global exception filter:
   "instance": "/api/v1/tasks/7f3a…", "code": "TASK_NOT_FOUND" }
 ```
 
-Rules: 400 validation (with zod issue list in `errors[]`), 401 unauthenticated, 403 unauthorized, 404 for both missing *and* inaccessible (no existence leak), 409 conflict (stale reorder, duplicate), 422 semantic rejection, 429 rate limit. Stack traces never leave the server; every response carries an `x-request-id` echoed in logs.
+Implemented with Spring's `ProblemDetail` (RFC 9457 is native since Spring 6) via a `@RestControllerAdvice`. Rules: 400 validation (Bean Validation failures mapped to an `errors[]` list), 401 unauthenticated, 403 unauthorized, 404 for both missing *and* inaccessible (no existence leak), 409 conflict (stale reorder, duplicate), 422 semantic rejection, 429 rate limit. Stack traces never leave the server; every response carries an `x-request-id` echoed in logs.
 
 ---
 
@@ -292,7 +298,7 @@ Notes:
 Boards and lists need stable drag-and-drop ordering without rewriting rows.
 
 - `sort_key` is a base-62 **fractional index** string (à la Figma / lexo-rank). Insert-between = generate key between neighbors; only the moved row is written.
-- Implementation: small utility in `packages/shared` (~100 lines, well-known algorithm; we use the `fractional-indexing` npm package rather than hand-rolling).
+- Implementation: a small server-side utility in the `tasks` module (~100 lines, well-known algorithm; a permissive Java lexo-rank/fractional-index library or a hand-rolled port — trivial and unit-tested exhaustively per §8).
 - Scopes: sections order within a project; tasks within a section (`sort_key`); subtasks within a parent (`subtask_sort_key`); projects within a portfolio.
 - **Conflict handling**: two clients inserting at the same spot can generate equal keys — allowed (ties broken by `created_at, id` in the ORDER BY), and a background compaction re-spreads keys if a scope's average key length exceeds a threshold. No user-visible failure mode.
 - Rejected alternatives: integer positions (O(n) rewrites, race-prone), linked lists (miserable to query).
@@ -338,25 +344,25 @@ All FKs get supporting indexes (Postgres does not auto-create them). Partial ind
 
 **Provider framework (built in MVP Sprint 1; only the Lark implementation is deferred to week 7):**
 
-1. **`IdentityProvider` port.** One interface — `authenticate(input) → IdentityClaims { provider, subject, email, emailVerified, name }`. Implementations: `LocalPasswordProvider` (argon2id, MVP), `LarkOAuthProvider` (week 7, first post-MVP item), `EntraOidcProvider` (Phase 3 in delivery-plan numbering, via `openid-client`). Zero changes to session issuance, guards, or any downstream module per provider.
+1. **`IdentityProvider` port.** One Java interface — `IdentityClaims authenticate(input)` returning `{ provider, subject, email, emailVerified, name }`. Implementations: `LocalPasswordProvider` (argon2id via Spring Security's `Argon2PasswordEncoder`, MVP), `LarkOAuthProvider` (week 7, first post-MVP item), `EntraOidcProvider` (Phase 3, via Spring Security OAuth2 Client). Zero changes to session issuance, the security filter chain, or any downstream module per provider.
 2. **Per-provider enable/disable via environment config** — the owner's requirement:
    - `AUTH_LOCAL_ENABLED` (default `true`) — email/password, invites, admin reset links.
    - `AUTH_LARK_ENABLED` (default `false`) — requires `LARK_APP_ID` + `LARK_APP_SECRET`; `LARK_BASE_URL` defaults to `https://open.larksuite.com` (set the Feishu domain `https://open.feishu.cn` for CN tenants — same provider code, different base URL).
    - **Boot validation fails fast** if zero providers are enabled, or an enabled provider is missing credentials — clear startup error, documented in the runbook.
    - `GET /api/v1/auth/providers` returns the enabled set; the login page renders only what is enabled (password form, "Continue with Lark" button, or both). Toggling is config + restart, not a settings screen (an admin UI for this is Phase-4 polish at most).
 3. **Identity is separate from user.** External identities live in `user_identities (provider, subject — unique)`, in the MVP schema from day 1 (§3.1); `users.password_hash` is nullable. Resolution order in `IdentityService`: (a) `(provider, subject)` match → sign in; (b) else verified-email match to an existing **active** user → link the identity (recorded in `activity_log`) and sign in; (c) else apply the provisioning policy: `AUTH_LARK_PROVISIONING=invite_only` (default) rejects with "ask an admin for an invite" — `auto` JIT-creates a member, optionally fenced by `AUTH_ALLOWED_EMAIL_DOMAINS` and/or `LARK_ALLOWED_TENANT_KEY`.
-4. **Lockout safety (consequence of toggles).** Disabling local auth while Lark is misconfigured or down must never brick the install: a break-glass CLI on the VM (`node dist/cli auth-recover`) re-enables local auth and/or mints an admin password-reset link, bypassing HTTP entirely. Startup logs a warning if local auth is disabled and any active admin has no linked external identity. Documented in the runbook next to the restore drill.
+4. **Lockout safety (consequence of toggles).** Disabling local auth while Lark is misconfigured or down must never brick the install: a break-glass CLI on the VM (`java -jar app.jar auth-recover`, a Spring `ApplicationRunner` guarded by a CLI profile) re-enables local auth and/or mints an admin password-reset link, bypassing HTTP entirely. Startup logs a warning if local auth is disabled and any active admin has no linked external identity. Documented in the runbook next to the restore drill.
 
 **`LarkOAuthProvider` specifics.** OAuth 2.0 authorization-code flow against the configured base domain: redirect to Lark's authorize endpoint with a session-bound `state` (CSRF); the callback exchanges the code server-side at Lark's OAuth token endpoint (client secret never leaves the API); profile fetched from the authen user-info endpoint. Stable subject = `union_id` (fallback `open_id`); `tenant_key` stored in `provider_meta` and optionally enforced. Note: the user's email is only present if the Lark app is granted the email scope in the Lark admin console — without it, email-based auto-linking is impossible and `invite_only` + explicit linking applies. Endpoints and scopes are configuration, so Lark (larksuite.com) and Feishu (feishu.cn) tenants use the same code path.
 
-**The drop-in guarantee** stays, now stated for all providers: adding or toggling a provider touches only `apps/api/src/auth/**` and the login page — kept honest by an acceptance test.
+**The drop-in guarantee** stays, now stated for all providers: adding or toggling a provider touches only the api's `auth` module (`apps/api/src/main/java/.../auth/**`) and the login page — kept honest by an acceptance test.
 
 ### 4.4 Realtime: SSE for MVP — [reversible]
 
 Decision: **Server-Sent Events**, one endpoint `GET /api/v1/events` (auth via session cookie), backed by Valkey pub/sub. Client subscribes to the entities it has open (project board, task, notifications badge); events are thin (`{ type: "task.updated", taskId, projectId }`) and the client refetches — no state-sync protocol to design or debug.
 
 Why not the alternatives, against a 6-week clock:
-- **Polling**: simplest, but 50 users × per-board polling gives worse UX (multi-second staleness) for barely less work than SSE — Nest supports SSE natively (`@Sse()`), so SSE is ~2 days.
+- **Polling**: simplest, but 50 users × per-board polling gives worse UX (multi-second staleness) for barely less work than SSE — Spring MVC returns SSE natively (`SseEmitter` / a `text/event-stream` `Flux`), fed by a Valkey pub/sub listener, so SSE is ~2 days.
 - **WebSocket**: bidirectional transport we don't need (all writes go through REST), plus gateway lifecycle, reconnect/backoff, and proxy config to get right. Deferred; if we ever need client→server streaming (live cursors, presence), the Valkey pub/sub backbone already exists and the client swap is contained in one hook.
 
 Fallback: SSE auto-reconnects natively; on top we refetch-on-window-focus (React Query default), so a dropped stream degrades to slightly-stale, never wrong.
@@ -365,7 +371,7 @@ Fallback: SSE auto-reconnects natively; on top we refetch-on-window-focus (React
 
 ### 4.5 API docs
 
-Nest's OpenAPI generation is on from day 1 (`/api/docs`, dev only). Cheap, and the Product Engineer and Designer both consume it.
+`springdoc-openapi` serves Swagger UI at `/api/docs` (dev only) and the spec that generates `packages/api-client` (§1.3) — on from day 1, consumed by the web build and the Designer.
 
 ---
 
@@ -413,8 +419,8 @@ These are comfortable on one 4 vCPU / 8 GB VM; we assert them in a Sprint-3 k6 r
 
 ### 6.4 Security
 
-- **OWASP basics**: argon2id password hashing; zod validation on every input; Prisma parameterization (no raw SQL except the roll-up aggregate and the trigram search query, both with bound params); httpOnly SameSite cookies + CSRF double-submit token on state-changing routes; security headers via Traefik middlewares (HSTS, X-Frame-Options DENY, nosniff) with CSP (`default-src 'self'`) set by the apps; OAuth callbacks protected by session-bound `state` (§4.3); dependency audit in CI (`pnpm audit` + Dependabot).
-- **Rate limiting & noisy-neighbor controls (D-022)**: `@nestjs/throttler` on Valkey — per-user 100 req/min **and per-org aggregate caps** (default 1,000 req/min, override via `organizations.limits`) so one tenant cannot starve the rest; `POST /auth/login` 5/min/IP with exponential lockout (OAuth callback endpoints included); uploads 20/hour/user. Per-org quotas: storage (§5), and soft row-count watermarks (projects/tasks) logged for capacity planning.
+- **OWASP basics**: argon2id password hashing; Jakarta Bean Validation on every input; jOOQ bind-parameterized SQL throughout (no string-built SQL — the roll-up aggregate and Phase-2 trigram search use bound params); httpOnly SameSite cookies + CSRF double-submit token on state-changing routes; security headers via Traefik middlewares (HSTS, X-Frame-Options DENY, nosniff) with CSP (`default-src 'self'`) set by the apps; OAuth callbacks protected by session-bound `state` (§4.3); dependency audit in CI (`pnpm audit` + Maven OWASP dependency-check + Dependabot).
+- **Rate limiting & noisy-neighbor controls (D-022)**: a Valkey-backed limiter (Bucket4j with its Redis/Redisson backend, Apache-2.0, or Resilience4j) — per-user 100 req/min **and per-org aggregate caps** (default 1,000 req/min, override via `organizations.limits`) so one tenant cannot starve the rest; `POST /auth/login` 5/min/IP with exponential lockout (OAuth callback endpoints included); uploads 20/hour/user. Per-org quotas: storage (§5), and soft row-count watermarks (projects/tasks) logged for capacity planning.
 - **Secrets**: `.env.prod` file on the VM, `chmod 600`, never in git (git-secrets hook in CI); rotated by redeploy. Docker/Swarm secrets are overkill for one VM [reversible].
 - **RBAC matrix (MVP)** — exactly **two org roles** (spec §2.1); "lead" is a persona, not a permission (PD-26); guest role is post-MVP. All projects are org-visible — no privacy in MVP (PD-25; the dormant `projects.private` column has no row here and no authz branch):
 
@@ -440,23 +446,23 @@ These are comfortable on one 4 vCPU / 8 GB VM; we assert them in a Sprint-3 k6 r
 |---|---|---|
 | `traefik` | traefik:v3 | 80/443 published; auto-TLS via built-in ACME (Let's Encrypt) or internal CA for intranet-only; `acme.json` on a volume; dashboard disabled in prod; the **only** service with published ports |
 | `web` | our Next.js image (multi-stage, standalone output) | |
-| `api` | our NestJS image (multi-stage, distroless-ish node:22-slim) | runs `prisma migrate deploy` as entrypoint step |
+| `api` | our Spring Boot image (multi-stage: Maven build → `eclipse-temurin:21-jre` runtime, layered jar) | runs Flyway migrations on startup (Spring Boot auto-runs them) |
 | `postgres` | postgres:16 | volume `pgdata`; not exposed to host |
 | `pgbouncer` | pgbouncer (edoburu image or equivalent) | transaction pooling between api replicas and Postgres — required the moment `api` scales past one replica; present from day 1 so it's exercised, not theoretical |
 | `valkey` | valkey/valkey:8 | AOF on; not exposed; Redis-protocol compatible (BSD-3) |
-| `worker` | same api image, worker entrypoint | BullMQ consumers (notification fan-out, purge jobs, quota watermarks) extracted from the api process (D-022) — api replicas stay purely request-serving |
+| `worker` | same api image, `worker` Spring profile | Redisson queue consumers + `@Scheduled` jobs (notification fan-out, purge, quota watermarks) extracted from the api process (D-022) — api replicas stay purely request-serving |
 | `backup` | postgres:16 + cron script | nightly pg_dump + attachment snapshot (§6.2) |
 
 **Traefik over Caddy and nginx** — [reversible; revised per D-018]: the original draft chose Caddy for zero-config auto-TLS. The owner set a **permissive-license-only policy** for every shipped runtime component, to keep future commercialization unencumbered. For accuracy: Caddy v2 itself is Apache-2.0 (commercial use is permitted — the historical restriction applied to v1's official binaries), but Traefik is MIT, equally capable here (built-in ACME auto-TLS, header middlewares, native Docker provider), and swapping now removes any diligence-time discussion entirely. nginx (BSD-2) + certbot remains the maximally-boring fallback, at the cost of a second moving part (cert renewal + reload orchestration) — adopt it only if Traefik misbehaves. Config lives in `docker/traefik.yml` + one dynamic file; routing via container labels.
 
-### 7.2 ORM: Prisma — [semi one-way door: switching ORMs mid-flight is expensive; chosen deliberately]
+### 7.2 Data access: jOOQ + Flyway (not Hibernate/JPA) — [semi one-way door; chosen deliberately]
 
-Prisma over TypeORM because: (1) schema-first with generated, actually-sound TypeScript types — with 2 builders moving fast, compile-time query safety is our main defense; (2) `prisma migrate` produces reviewable SQL migrations with a clean deploy story (`migrate deploy` is idempotent and CI-testable), versus TypeORM's historically brittle sync/migration behavior; (3) the team knows it. Known costs accepted: no lazy relations (fine — we want explicit queries), raw SQL escape hatch needed for the portfolio roll-up aggregate and the `pg_trgm` search query (fine — 2 queries, tested).
+**jOOQ over Hibernate/Spring Data JPA**, for three reasons that line up with this project: (1) **licensing** — jOOQ's open-source edition is **Apache-2.0 against PostgreSQL**, whereas Hibernate ORM is **LGPL-2.1**; the permissive-only policy (D-021) makes jOOQ the clean choice and keeps a copyleft-family lib out of the shipped stack. (2) **SQL control** — the differentiating work here is explicit SQL (the portfolio roll-up aggregate, the RLS `SET LOCAL` per transaction, `pg_trgm` search in Phase 2); jOOQ gives compile-time-checked, typed SQL generated from the schema, which fits far better than an ORM that wants to hide the SQL. (3) **no lazy-loading / N+1 surprises** — every query is explicit, which is exactly the discipline the roll-up perf risk (R5) needs. **Flyway** (Apache-2.0) owns versioned SQL migrations — including the RLS policies — with an idempotent, CI-testable deploy; Spring Boot runs pending migrations on startup. jOOQ's typed classes are code-generated from the migrated schema in the Maven build. Cost accepted: more hand-written SQL than an ORM (that's the point), and the jOOQ codegen step in the build.
 
 ### 7.3 Environments
 
-- **dev**: `docker-compose.yml` runs postgres/valkey only; web+api run on the host with hot reload (`pnpm dev`). Seed script creates demo org/projects/portfolio.
-- **prod**: `docker-compose.prod.yml` (all six services), `.env.prod` for secrets, images built in CI and pulled by tag (git SHA) — the VM never builds.
+- **dev**: `docker-compose.yml` runs postgres/valkey only; web runs on the host (`pnpm dev`) and api via `./mvnw spring-boot:run` (Spring DevTools hot restart). Seed script creates demo org/projects/portfolio.
+- **prod**: `docker-compose.prod.yml` (all services), `.env.prod` for secrets, images built in CI and pulled by tag (git SHA) — the VM never builds.
 
 ### 7.4 Zero-to-running runbook (outline — full doc in `docs/runbook.md`)
 
@@ -464,13 +470,13 @@ Prisma over TypeORM because: (1) schema-first with generated, actually-sound Typ
 2. DNS A record → VM; open 80/443 (intranet firewall rules as required).
 3. `git clone` repo (or copy release bundle); `cp .env.prod.example .env.prod`; fill secrets (`openssl rand` helpers documented).
 4. `docker compose -f docker-compose.prod.yml up -d` — api entrypoint runs migrations; Traefik obtains certs via ACME.
-5. `docker compose exec api node dist/cli seed-admin` → first admin user.
+5. `docker compose exec api java -jar app.jar seed-admin` → first admin user.
 6. Verify `/readyz`, log in, create org. 7. Run restore drill once (§6.2). Target: **under 1 hour**.
 
 ### 7.5 Upgrade strategy
 
 - Release = git tag → CI builds/pushes images tagged with SHA + version.
-- Upgrade = `git pull && docker compose pull && docker compose up -d`. Api entrypoint runs `prisma migrate deploy` before serving; **migrations must be backward-compatible one version** (expand → migrate → contract discipline) so a rollback is just redeploying the previous tag. Destructive migrations require a pre-upgrade backup checkpoint (scripted).
+- Upgrade = `git pull && docker compose pull && docker compose up -d`. Spring Boot runs pending Flyway migrations before serving; **migrations must be backward-compatible one version** (expand → migrate → contract discipline) so a rollback is just redeploying the previous tag. Destructive migrations require a pre-upgrade backup checkpoint (scripted).
 - Brief downtime (<1 min) during `up -d` is acceptable for an internal tool; no blue/green.
 
 ---
@@ -479,14 +485,14 @@ Prisma over TypeORM because: (1) schema-first with generated, actually-sound Typ
 
 | Layer | Tooling | Mandatory in 6 weeks | Deferred |
 |---|---|---|---|
-| **Unit** | Vitest | Ordering utils (fractional index — exhaustive, incl. tie/rebalance), authz policies, roll-up calculators, IdentityService | Broad coverage targets — no % gate |
-| **Integration (API)** | Vitest + Testcontainers (real Postgres+Valkey) | The contract per module: auth flows (login, invite accept, password reset, provider-toggle boot validation), task CRUD + **move/reorder races**, portfolio roll-up + timeline query, RBAC matrix as a table-driven test (incl. any-member-can-post-status), pagination cursors, **tenant-isolation suite (D-023): two seeded orgs, every endpoint asserted to return/mutate only the caller's tenant, plus a "layer-1 bug drill" that bypasses the app filter and proves RLS alone blocks the leak** | Notification fan-out edge cases |
-| **E2E** | Playwright | **One smoke path**: login → create project → add sections/tasks → drag reorder → assign → comment+attach → create portfolio → see roll-up + timeline → status update appears | Cross-browser, visual regression, mobile |
+| **Unit** | JUnit 5 | Ordering utils (fractional index — exhaustive, incl. tie/rebalance), authz policies, roll-up calculators, IdentityService | Broad coverage targets — no % gate |
+| **Integration (API)** | JUnit 5 + **Testcontainers** (real Postgres+Valkey; Testcontainers is JVM-native) + Spring `MockMvc`/`WebTestClient` | The contract per module: auth flows (login, invite accept, password reset, provider-toggle boot validation), task CRUD + **move/reorder races**, portfolio roll-up + timeline query, RBAC matrix as a parameterized test (incl. any-member-can-post-status), pagination cursors, **tenant-isolation suite (D-023): two seeded orgs, every endpoint asserted to return/mutate only the caller's tenant, plus a "layer-1 bug drill" that bypasses the app filter and proves RLS alone blocks the leak** | Notification fan-out edge cases |
+| **E2E** | Playwright (Node runner against the running web app — language-agnostic at this layer) | **One smoke path**: login → create project → add sections/tasks → drag reorder → assign → comment+attach → create portfolio → see roll-up + timeline → status update appears | Cross-browser, visual regression, mobile |
 | **Load** | k6 | One Sprint-3 script: 100 VUs on board read + reorder + portfolio timeline, assert §6.1 | Sustained soak |
 
-Principles: integration tests against a **real** Postgres (Testcontainers) are the backbone — mocked-DB tests would miss exactly our risk areas (ordering, constraints, roll-up SQL). E2E stays at one smoke flow; it's a tripwire, not a spec.
+Principles: integration tests against a **real** Postgres (Testcontainers) are the backbone — mocked-DB tests would miss exactly our risk areas (ordering, constraints, roll-up SQL, and RLS itself). E2E stays at one smoke flow; it's a tripwire, not a spec.
 
-**CI (GitHub Actions)**, per PR (~6–8 min): lint + typecheck → unit → integration (services: postgres, valkey) → build images → Playwright smoke against compose stack → `pnpm audit` → **license gate** (license-checker against the Appendix allowlist — a copyleft/source-available dependency fails the build). `main` builds and pushes release images. A scheduled weekly job runs `prisma migrate deploy` against a restored copy of the latest prod dump — migration + backup verification in one.
+**CI (GitHub Actions)**, two lanes per PR: **api lane** (`mvn verify` — spotless/checkstyle + unit + Testcontainers integration + jar build) and **web lane** (lint + typecheck + build + `pnpm audit`), then a shared **Playwright smoke** against the compose stack, an **api-client drift check** (regenerate from the OpenAPI spec and fail on diff — §1.3), and the **license gate** — now covering both npm (license-checker) and Maven (`license-maven-plugin`) against the Appendix allowlist, so a copyleft/source-available dependency on either side fails the build. `main` builds and pushes release images. A scheduled weekly job runs `prisma migrate deploy` against a restored copy of the latest prod dump — migration + backup verification in one.
 
 ---
 
@@ -501,7 +507,7 @@ Principles: integration tests against a **real** Postgres (Testcontainers) are t
 | 5 | **Single-VM data loss / failed restore** — backups exist but don't restore | Low / Critical | `pg_dump` + volume snapshot + off-VM sync (§6.2); restore drill pre-go-live and quarterly; weekly CI job restores latest dump and runs migrations against it — a corrupt backup is detected within 7 days, not at disaster time |
 | 6 | **Cross-tenant data leak** — a missed org filter or RLS policy gap exposes one tenant's data to another (the SaaS-killing defect class) | Low / **Critical** | Double-wall isolation (app filter + RLS, §2.3); RLS policies generated per table in migrations, reviewed as a set; tenant-isolation integration suite incl. the layer-1 bug drill (§8) runs on every PR; new tables cannot merge without an RLS policy (CI grep on migrations); `/metrics` per-org counters make anomalous cross-org access patterns visible |
 
-Watchlist (not top-6): Prisma raw-SQL drift on the two hand-written queries (covered by integration tests); Next.js/Nest version churn (pin minors, upgrade in Sprint gaps); auth-seam erosion (acceptance test in §4.3 keeps SSO honest); RLS + PgBouncer interaction (transaction pooling requires the GUC to be set per-transaction, not per-session — enforced by a Prisma middleware and covered in the isolation suite).
+Watchlist (not top-6): jOOQ codegen kept in sync with Flyway migrations (build regenerates; drift fails compile); Next.js / Spring Boot version churn (pin, upgrade in Sprint gaps); auth-seam erosion (acceptance test in §4.3 keeps SSO honest); **RLS + PgBouncer interaction** (transaction pooling requires the GUC be set with `SET LOCAL` inside each transaction, never per-session — enforced by the transaction-synchronized hook in `core` and covered by the isolation suite); OpenAPI-client drift (CI regenerate-and-diff check).
 
 ---
 
@@ -542,15 +548,18 @@ Billing/entitlements (plan tiers mapped to `organizations.limits`), self-serve s
 
 | Decision | Choice | Door |
 |---|---|---|
-| Monorepo tooling | pnpm workspaces (no Turborepo) | reversible |
-| ORM | Prisma | semi one-way |
-| Ordering | fractional indexing (lexo-rank strings) | reversible |
-| Auth | JWT cookie sessions + multi-provider `IdentityProvider` framework; local + Lark independently toggleable via env; Entra later (D-020) | designed for provider drop-in |
-| Realtime | SSE + Valkey pub/sub, notify-then-refetch | reversible (WS later) |
-| Tenancy | multi-tenant from day 1: global users + per-org memberships, `organization_id` + **RLS on every tenant table**, per-org quotas, `SIGNUP_MODE` gate — D-022/D-023 | one-way (good) — retrofitting tenancy is the rewrite we refuse |
+| API language/framework | **Java 21 / Spring Boot** (Maven) — D-026 | semi one-way (the rewrite this doc just absorbed) |
+| Web | Next.js / React (TypeScript) — unchanged | — |
+| web↔api contract | OpenAPI-generated TS client (`springdoc-openapi` → `packages/api-client`), CI drift check — D-026 | reversible |
+| Repo | polyglot monorepo: pnpm (web) + Maven (api) in one git repo | reversible |
+| Data access | **jOOQ** (Apache-2.0) + Flyway migrations — D-026 | semi one-way |
+| Ordering | fractional indexing (lexo-rank strings), server-computed | reversible |
+| Auth | JWT cookie sessions + multi-provider `IdentityProvider` framework (Spring Security); local + Lark toggleable via env; Entra later (D-020) | designed for provider drop-in |
+| Realtime | SSE (Spring `SseEmitter`) + Valkey pub/sub, notify-then-refetch | reversible (WS later) |
+| Tenancy | multi-tenant from day 1: global users + per-org memberships, `organization_id` + **RLS on every tenant table** (GUC via `SET LOCAL`), per-org quotas, `SIGNUP_MODE` gate — D-022/D-023 | one-way (good) — retrofitting tenancy is the rewrite we refuse |
 | Attachments | S3-compatible object storage in prod behind `StorageProvider` (local disk in dev) — D-024 | reversible per provider |
 | DB pooling | PgBouncer (transaction mode) from day 1 | reversible |
-| Workers | dedicated worker container (BullMQ) from day 1 | reversible |
+| Workers | same Spring jar, `worker` profile; Redisson queue + `@Scheduled` — D-022 | reversible |
 | Proxy/TLS | Traefik v3 (MIT) — D-018 | reversible (nginx + certbot fallback) |
 | Cache/queue/pub-sub | Valkey 8 (BSD-3), Redis-protocol drop-in — D-019 | reversible |
 | License policy | permissive-only runtime stack, CI-gated allowlist — D-021 | policy (see licensing appendix) |
@@ -566,44 +575,52 @@ Billing/entitlements (plan tiers mapped to `organizations.limits`), self-serve s
 
 ## Appendix: Licensing & commercialization audit (D-018, D-019, D-021)
 
-**Policy (owner-set, 20 Jul 2026):** every component that ships as part of the Cairn runtime must carry a permissive license — MIT, BSD, Apache-2.0, ISC, PostgreSQL, OFL, CC0 class. No copyleft (GPL/AGPL), no source-available (SSPL, RSAL, BUSL, FSL, Elastic) in shipped components. Dev-only tooling that is never distributed with the product is exempt but tracked below. Enforced by a **CI license gate** (license-checker allowlist) so a stray transitive dependency fails the build instead of surfacing during due diligence.
+**Policy (owner-set, 20 Jul 2026):** every component that ships as part of the Cairn runtime must carry a permissive license — MIT, BSD, Apache-2.0, ISC, PostgreSQL, OFL, CC0 class. No **strong copyleft (GPL/AGPL)** and no **source-available (SSPL, RSAL, BUSL, FSL, Elastic)** in shipped components. Enforced by a **CI license gate** on both build systems (npm via license-checker, Maven via `license-maven-plugin`).
 
-### Shipped runtime components — all permissive
+**Java raises two nuances the Node stack did not — resolved explicitly (D-026):**
+- **The JVM itself is GPL-lineage.** Every mainstream JDK — Temurin/Adoptium, OpenJDK, GraalVM CE — is **GPLv2 with the Classpath Exception (CE)**. The CE exists precisely so that linking your application to the JVM/class libraries does **not** propagate the GPL to your code; proprietary and commercial distribution on OpenJDK is standard and unambiguous. There is *no* fully-permissive mainstream JDK, so choosing Java means accepting a GPL-**with-CE** runtime. This is a deliberate, documented exception to the "MIT/BSD/Apache only" ideal — narrow (the runtime, not our deps) and industry-normal. (Oracle's own JDK build carries commercial terms — we do **not** use it; Temurin only.)
+- **Weak/file-level copyleft (LGPL, EPL, MPL, CDDL) appears in the Java ecosystem.** These permit proprietary distribution when used as-is via linking, but to honor the spirit of the policy we **prefer a permissive alternative whenever one exists** and allow weak-copyleft only where unavoidable and clearly bounded (e.g. some Jakarta/JUnit artifacts are EPL-2.0 — mostly test-scope). The CI Maven gate flags GPL/AGPL/SSPL/etc. as failures and LGPL/EPL/MPL as **warnings to review**, not silent passes.
+
+### Shipped runtime components — permissive (JVM excepted as above)
 
 | Component | License | Note |
 |---|---|---|
-| Node.js | MIT-style | |
-| Next.js / React | MIT | |
-| NestJS | MIT | |
-| Prisma | Apache-2.0 | |
+| **Java runtime — Eclipse Temurin 21 (OpenJDK)** | **GPLv2 + Classpath Exception** | The documented exception above; CE permits proprietary distribution |
+| **Spring Boot / Spring Framework / Spring Security** | Apache-2.0 | The API framework (D-026) |
+| **jOOQ (open-source edition, for PostgreSQL)** | **Apache-2.0** | Chosen over Hibernate specifically to stay permissive (§7.2) |
+| **Flyway (community)** | Apache-2.0 | Migrations |
+| Redisson / Lettuce (Valkey clients + queue) | Apache-2.0 | |
+| springdoc-openapi, Bucket4j, argon2 (Spring Security) | Apache-2.0 | Contract gen, rate limiting, password hashing |
+| Next.js / React, Node.js (web build/runtime) | MIT / MIT-style | Web app unchanged |
+| generated `api-client` (openapi-typescript) | MIT | |
 | PostgreSQL 16 | PostgreSQL License (permissive) | |
-| **Valkey 8** | **BSD-3-Clause** | Replaces Redis (D-019); Redis-protocol drop-in — `ioredis`/BullMQ unchanged |
-| BullMQ / ioredis | MIT | |
+| **Valkey 8** | **BSD-3-Clause** | Replaces Redis (D-019) |
 | **Traefik v3** | **MIT** | Replaces Caddy (D-018) |
-| zod | MIT | |
-| anime.js v4 | MIT | |
-| fractional-indexing | CC0 | |
-| Inter / JetBrains Mono | SIL OFL 1.1 | Embedding/bundling in a commercial product is permitted; the fonts themselves may not be sold standalone |
-| Docker Engine (on the VM) | Apache-2.0 | Server-side engine is unencumbered |
+| anime.js v4 | MIT | Web motion |
+| Inter / JetBrains Mono | SIL OFL 1.1 | Bundling in a commercial product is permitted; fonts not sold standalone |
+| Docker Engine (on the VM) | Apache-2.0 | Server-side engine unencumbered |
 
 ### Deliberately avoided or swapped
 
 | Component | License problem | Our position |
 |---|---|---|
-| **Redis ≥ 7.4** | RSALv2 / SSPLv1 (8.x offers AGPLv3) — source-available/copyleft | Swapped to Valkey (D-019) |
-| **Caddy** | None in fact — v2 is Apache-2.0 (v1 binary licensing history caused the confusion) | Swapped to MIT Traefik anyway under the blanket policy (D-018) |
-| **MinIO** | AGPLv3 | If/when attachments outgrow the local volume: SeaweedFS (Apache-2.0) or a managed S3 bucket via the existing `StorageProvider` port — never MinIO |
-| **Sentry (server)** | FSL (source-available) | If error tracking is adopted: GlitchTip (MIT) per §6.3 |
+| **Hibernate ORM / Spring Data JPA** | LGPL-2.1 (weak copyleft) | Use **jOOQ (Apache-2.0)** instead (§7.2, D-026) — also the better fit for our explicit-SQL needs |
+| **Oracle JDK** | Commercial (Oracle terms) | Use **Temurin/OpenJDK** (GPLv2+CE) only |
+| **Redis ≥ 7.4** | RSALv2 / SSPLv1 (8.x offers AGPLv3) | Swapped to Valkey (D-019) |
+| **Caddy** | None in fact — v2 is Apache-2.0 | Swapped to MIT Traefik anyway under the blanket policy (D-018) |
+| **MinIO** | AGPLv3 | SeaweedFS (Apache-2.0) or a managed S3 bucket via the `StorageProvider` port — never MinIO |
+| **Sentry (server)** | FSL (source-available) | GlitchTip (MIT) if error tracking is adopted (§6.3) |
 
-### Dev-only tooling (not distributed — exempt, tracked)
+### Dev/build-only tooling (not distributed — exempt, tracked)
 
 | Tool | License | Note |
 |---|---|---|
-| k6 (load test) | AGPLv3 | Runs against the app from outside; never shipped. Swap to autocannon (MIT) if a zero-AGPL-anywhere policy is ever adopted |
-| Playwright / Vitest / pnpm / eslint | Apache-2.0 / MIT | Fine |
-| Docker Desktop (dev laptops) | Paid tier for large orgs (>250 employees & >$10M revenue) | Engine/CLI on Linux is Apache-2.0; irrelevant at current size — noted for the commercialization file |
+| Maven / Gradle wrapper, JUnit 5 | Apache-2.0 / EPL-2.0 | Build + test scope; not shipped |
+| k6 (load test) | AGPLv3 | Runs against the app from outside; never shipped |
+| Playwright / pnpm / eslint | Apache-2.0 / MIT | Fine |
+| Docker Desktop (dev laptops) | Paid tier for large orgs (>250 employees & >$10M revenue) | Linux Engine/CLI is Apache-2.0; noted for the commercialization file |
 
-**If Cairn itself is commercialized:** with the stack above fully permissive, Cairn's own license is unconstrained — proprietary, dual-license, or open-core all remain open. Keep this appendix current (the CI gate keeps dependencies honest; review it at each phase gate).
+**If Cairn itself is commercialized:** shipping on a GPL+**CE** JVM does **not** constrain Cairn's own license — the Classpath Exception is designed exactly for this, so proprietary, dual-license, or open-core all remain open. The only genuine change from the Node stack is that "100% MIT/BSD/Apache" becomes "MIT/BSD/Apache application deps on a GPL+CE runtime." Keep this appendix current; the two-system CI gate keeps dependencies honest.
 
 ---
 
@@ -625,4 +642,4 @@ Billing/entitlements (plan tiers mapped to `organizations.limits`), self-serve s
 | PD-29 | **Applied** | Ruling stated in §4.1: UUIDv7 in API and web, `/tasks/:id` + `?task=` overlay, no vanity slugs |
 | PD-34 | **Applied** | `users.avatar_url` marked dormant (initials-only MVP) |
 | PD-38 | **Applied** | Status reverted to Draft v2, pending spec v1.1 sign-off; sign-off order noted in header |
-| §5 item 9 (retention) | **Applied** | 90-day notification purge job (nightly BullMQ) noted in module table + index plan |
+| §5 item 9 (retention) | **Applied** | 90-day notification purge job (nightly `@Scheduled` in the worker) noted in module table + index plan |

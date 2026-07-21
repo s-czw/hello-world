@@ -79,17 +79,19 @@ an example opening prompt you can paste, and the exit gate.
 ### M0 — Foundations & the walls (biggest, most important)
 **Spec:** A1–A2, arch §1–§7, §10 invariants. **Goal:** a fresh install where an admin creates an org and
 signs in, on the full compose stack, with tenant isolation and CI gates real from commit #1.
-- Monorepo (pnpm), Next.js + NestJS skeletons, `packages/shared`.
+- Polyglot monorepo: Next.js (pnpm) web skeleton + Spring Boot (Maven, Java 21) api skeleton + generated `packages/api-client`.
 - Compose: traefik, web, api, worker, pgbouncer, postgres, valkey, backup sidecar; dev + prod files.
-- CI with all gates incl. license + RLS-policy checks.
-- Prisma schema for the full MVP ERD (arch §3) + **RLS policies + per-transaction GUC middleware**.
+- Two-lane CI (`mvn verify` / web build / smoke / OpenAPI-client drift / license gate) incl. RLS-policy check.
+- Flyway schema for the full MVP ERD (arch §3) + jOOQ codegen + **RLS policies + the per-transaction GUC hook**.
 - Auth: session model + `IdentityProvider` framework + `LocalPasswordProvider`; A1 first-run org with
   `SIGNUP_MODE`; seed script (demo org, sample project).
-> **Prompt:** *"Read `CLAUDE.md` and `docs/02-architecture.md` §1–§7 and §3. Scaffold the pnpm monorepo,
-> the compose stacks, and CI with the license and RLS-policy gates. Then implement the Prisma schema for
-> the MVP ERD with RLS on every tenant table (per-transaction GUC), and A1/A2 auth with the local provider
-> and the provider-toggle framework. Write integration tests including the tenant-isolation suite with the
-> layer-1 bug drill. Deploy to the staging compose stack and show me the smoke passing."*
+> **Prompt:** *"Read `CLAUDE.md` and `docs/02-architecture.md` §1–§7 and §3. Scaffold the polyglot monorepo
+> (Next.js web + Spring Boot Maven api + generated api-client), the compose stacks, and the two-lane CI with
+> the license, RLS-policy, and OpenAPI-drift gates. Then implement the Flyway schema for the MVP ERD with
+> jOOQ codegen and RLS on every tenant table (`SET LOCAL` GUC hook), and A1/A2 auth (Spring Security) with
+> the local provider and the provider-toggle framework. Write JUnit+Testcontainers tests including the
+> tenant-isolation suite with the layer-1 bug drill. Deploy to the staging compose stack and show the smoke
+> passing."*
 - **Exit:** fresh install → create org → log in works on staging; isolation suite (incl. bug drill) green;
   all CI gates green. **This is the gate that de-risks everything; don't rush past a red isolation test.**
 
@@ -98,9 +100,9 @@ signs in, on the full compose stack, with tenant isolation and CI gates real fro
 inline edit + drag + quick-add, open the side-peek task panel.
 > **Prompt:** *"Per `docs/01-product-spec.md` B1–B3 and C1 and `docs/03-design.md` §4.a/§4.c, implement
 > teams, projects (create/edit/archive/overview), sections, the list view (5 fixed columns, inline edit,
-> drag reorder + 'Move to…' menu, quick-add), and the task detail side-peek. Reuse the shared zod schemas.
-> Integration tests for task CRUD + the move/reorder race; axe + keyboard pass on the list. Deploy and
-> drive it with the verify skill."*
+> drag reorder + 'Move to…' menu, quick-add), and the task detail side-peek. DTOs carry Jakarta Bean
+> Validation; the web consumes the generated api-client. Integration tests for task CRUD + the move/reorder
+> race; axe + keyboard pass on the list. Deploy and drive it with the verify skill."*
 - **Exit:** DoD met; ordering race test green; keyboard path works; `/code-review` clean.
 
 ### M2 — Collaboration & My Tasks
@@ -132,7 +134,7 @@ rehearsal, seed the two pilot programs.
 
 ### Post-MVP, week 7: Lark sign-in
 `LarkOAuthProvider` behind `AUTH_LARK_ENABLED` (arch §4.3) — the acceptance test proves it touches only
-`apps/api/src/auth/**` + the login page.
+the api's `auth` module + the login page.
 
 ---
 
@@ -204,8 +206,9 @@ meets the DoD, the adversarial passes are clean, and you've run it. That discipl
 1. *"Read `CLAUDE.md` and `docs/`. Confirm you understand the invariants and the MVP scope (spec Appendix A),
    then start Milestone 0: scaffold the monorepo, compose stacks, and CI gates. Stop and show me the CI
    config and the compose topology before writing feature code."*
-2. *"Implement the M0 Prisma schema with RLS on every tenant table and the per-transaction GUC middleware.
-   Write the tenant-isolation integration suite including the layer-1 bug drill. Show me a failing bug-drill
-   test first (to prove it catches leaks), then make it pass with RLS."*
+2. *"Implement the M0 Flyway schema (with jOOQ codegen) with RLS on every tenant table and the
+   transaction-synchronized `SET LOCAL` GUC hook. Write the tenant-isolation integration suite including the
+   layer-1 bug drill. Show me a failing bug-drill test first (to prove it catches leaks), then make it pass
+   with RLS."*
 3. *"Implement A1/A2 auth with the local provider and the provider-toggle framework. Then deploy the stack
    and walk me through creating an org and signing in on staging."*
