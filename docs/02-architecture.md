@@ -544,6 +544,35 @@ Billing/entitlements (plan tiers mapped to `organizations.limits`), self-serve s
 
 ---
 
+## 11. Topology: modular monolith now, microservices deliberately declined (D-027)
+
+Cairn ships as a **modular monolith** — one Spring Boot `api` deployable — plus the already-split **worker** (same jar, `worker` profile). Not microservices, and not by omission: the trade was evaluated and the monolith wins decisively for *this* system through scale tiers T0–T2 (§10). The api/worker split is the only decomposition, made along a proven seam (request-serving vs background work) for independent scaling — and it is the *template* for any future split.
+
+### 11.1 Why microservices lose here — tied to our own invariants, not dogma
+
+- **Tenant isolation is our crown-jewel invariant (D-023) and is simplest and safest in one datastore.** One Postgres + RLS + the per-transaction GUC is the whole story. Microservices force either a **shared DB across services** (the distributed-monolith anti-pattern) or **a DB per service**, each needing its own org-context plumbing and RLS policies — multiplying the surface area for the one defect class that kills a SaaS (cross-tenant leak, R9). Decomposition makes our most important property *harder and riskier*.
+- **Core writes are single transactions today.** "Task move + reorder", "status update → activity → notification enqueue" are one `@Transactional` unit. Across service boundaries they become sagas / eventual consistency — real complexity and new failure modes for zero benefit at 10–50 users per tenant.
+- **The differentiating read is one SQL aggregate.** The portfolio roll-up (R5) joins projects, tasks, and latest status in a single indexed query. Split those into separate services with separate stores and it degrades into API composition / N+1 — worsening the exact feature Cairn exists for.
+- **Operational reality.** T0 is one VM on Docker Compose, built by one implementer to a 6-week MVP. N services = N pipelines, service discovery, inter-service authn, distributed tracing — cost with no payoff. Vertical Postgres + api replicas behind PgBouncer (T1) and HPA (T2) carry this I/O-light workload far past any realistic tenant count before decomposition is even a question.
+- **Build model.** Claude Code builds in small vertical slices verified end-to-end (docs/05); microservices cut horizontally against that, spreading context and integration surface and slowing verification.
+
+### 11.2 What we do keep — so the option stays open (modular-monolith discipline)
+
+Already enforced in §2 and `CLAUDE.md`: hard module boundaries; no module reaches into another's internals (only its public service interface); cross-module comms via `ApplicationEventPublisher`, with durable fan-out already riding the Valkey queue; stateless api. This is what prevents the "big ball of mud" failure mode of a lazy monolith and keeps a clean carve-out possible.
+
+### 11.3 Extraction triggers — any one re-opens the question (as a decision-log entry)
+
+Extract **one hot component** along its existing seam; never "decompose into microservices" wholesale. First candidates, in likelihood order: **notifications/fan-out**, **search** (Phase 2, once it gains its own index/engine), **attachments/media** processing. Triggers:
+
+1. A component with a genuinely different scaling or resource profile that is starving the api (measured, not assumed).
+2. Independent team ownership (we have none today).
+3. A fault-isolation requirement (a subsystem crash must not take the whole app down).
+4. Per-component data residency or compliance boundary.
+
+None hold today. If Cairn becomes a multi-product platform with several engineering teams, revisit — until then, splitting a module into a service is a **release-blocker-level change** that requires a decision-log trigger.
+
+---
+
 ## Appendix: decision summary
 
 | Decision | Choice | Door |
@@ -564,6 +593,7 @@ Billing/entitlements (plan tiers mapped to `organizations.limits`), self-serve s
 | Cache/queue/pub-sub | Valkey 8 (BSD-3), Redis-protocol drop-in — D-019 | reversible |
 | License policy | permissive-only runtime stack, CI-gated allowlist — D-021 | policy (see licensing appendix) |
 | Scale path | tiered T0→T3 with explicit triggers (§10); no k8s/sharding before their tier | policy |
+| Topology | **modular monolith** (one Spring Boot api) + worker; **microservices declined** — extraction seams kept, triggers named (§11) — D-027 | reversible by carving one component along its seam |
 | Multi-homing tasks | excluded from MVP | additive migration if needed |
 | Pagination | cursor-based only | one-way (good) |
 | IDs / URLs | UUIDv7 everywhere; web `/tasks/:id` + `?task=` overlay; no slugs | one-way (good) |

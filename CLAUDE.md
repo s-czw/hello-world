@@ -89,3 +89,4 @@ fails the build if the client is stale. Server validation = Jakarta Bean Validat
 - Never expand MVP scope without a decision-log entry + a cut.
 - Never invent an API/library signature — check the installed version; if unsure, say so.
 - Never push to a branch other than the one you're told; never open a PR unless asked.
+- Never split a module into a separate service, or add a datastore — we are a **modular monolith** by design (one api + the worker profile); decomposition needs a decision-log trigger (arch §11, D-027).
