@@ -3,7 +3,7 @@
 **Document:** 01-product-spec.md
 **Author:** Product Engineer
 **Date:** 20 July 2026
-**Status:** v1.1 — PMO review (PD-1…PD-42) applied; ready for sign-off. Architecture and design v2 follow this doc.
+**Status:** v1.2 — owner-directed re-baseline for **multi-tenant SaaS** (D-022): multi-org tenancy in MVP, scope cuts to fund it (D4 ships as its table floor; D5, Ctrl+K search, second template, and the stretch ladder are cut). Base: v1.1 — PMO review (PD-1…PD-42) applied.
 **Audience:** Tech Lead (architecture spec follows this doc), Designer (UI/UX spec follows this doc), Project Director (delivery plan follows this doc)
 
 ---
@@ -141,10 +141,12 @@ Conventions: stories are `As a <persona>, I want <thing>, so that <why>`. Accept
 
 ### 4.1 Module: Auth & org setup
 
-**A1. First-run org creation.**
-As an admin, I want the first account created on a fresh install to set up the organization, so that deployment → usable takes minutes.
-- AC: On a fresh DB, visiting the app shows a "Create your organization" flow: org name + admin name/email/password. Completing it creates the org, a default "General" team, and logs the admin in as role=admin.
-- AC: Once an org exists, this flow is unreachable; the login page shows instead.
+**A1. Organization creation (multi-tenant, D-022).**
+As an admin, I want to create an organization on the deployment, so that setup → usable takes minutes — and so that the same deployment can host more organizations later (our org is tenant #1).
+- AC: On a fresh DB, visiting the app shows a "Create your organization" flow: org name + admin name/email/password. Completing it creates the org (with a unique slug), a default "General" team, and logs the admin in as role=admin of that org.
+- AC: Further org creation is gated by `SIGNUP_MODE` (`closed` — instance operator only, the pilot default · `invite` · `open` — self-serve, for a future commercial launch). Roles are per-org: admin of org A is a plain member (or nothing) in org B.
+- AC: A user belonging to multiple orgs gets an **org switcher** in the sidebar; all navigation (My Tasks, projects, portfolios, search-less nav, notifications) is scoped to the active org. Users in exactly one org never see the switcher.
+- AC: Cross-tenant isolation is absolute: no object, count, name, or notification from another org is ever visible, regardless of URL guessing (enforced by RLS — arch §2.3).
 
 **A2. Email/password auth.**
 As any user, I want to sign in with email + password, so that access is controlled.
@@ -172,7 +174,7 @@ As a member, I want projects grouped by team, so that the sidebar reflects how w
 
 **B2. Create project.**
 As a project lead, I want to create a project in under 2 minutes, so that new work is captured immediately.
-- AC: Create dialog: name (required), team (defaults to my most recent), owner (defaults to me), start/end dates (optional), color, starting view (list default / board), and a **template choice: "Blank" or "Simple ops checklist"** (pre-seeded sections + example tasks). [PD-31, ratified via decision log]
+- AC: Create dialog: name (required), team (defaults to my most recent), owner (defaults to me), start/end dates (optional), color, starting view (list default / board). Projects start with the default section set — **the "Simple ops checklist" template picker is cut (D-022 funding); the seeded sample project below carries the teaching load.** [supersedes the PD-31 template ratification]
 - AC: On create, project has 3 default sections ("To do", "In progress", "Done") — or the template's sections — and opens in its default view.
 - AC: A **deletable sample project** ("Getting started with Cairn") is seeded with the org at first-run, demonstrating sections, tasks, a subtask, and a status update; deleting it is one confirm. [PD-31]
 - AC: Project header shows name, color, owner, dates, current status chip, and view switcher tabs (List | Board | *Overview*). Overview tab = description + status update history + members active in the project.
@@ -186,7 +188,7 @@ As a member, I want a fast list of tasks grouped by section, so that I can scan 
 - AC: Toggle "show completed" (default: hide completed older than 7 days).
 - AC: Sort within the view by due date, assignee, **or priority** (temporary sort; manual order is the persisted default). Sort-by-priority added per PD-14a so the priority field earns its keep in MVP.
 - AC (confirmation, PD-30): **filters, group-by (other than Section), and saved views remain Phase 1** — no filter popover in the MVP list toolbar.
-- AC: Keyboard scope in MVP (PD-3/PD-14b): ↑/↓ row navigation, Enter (open/quick-add), `x` (complete), Esc, Ctrl/Cmd-K search. No full chord map. Drag alternative for accessibility = "Move to section/position…" in the row ⋯-menu.
+- AC: Keyboard scope in MVP (PD-3/PD-14b, search removed per D-022): ↑/↓ row navigation, Enter (open/quick-add), `x` (complete), Esc. No full chord map. Drag alternative for accessibility = "Move to section/position…" in the row ⋯-menu.
 
 **B4. Board view.**
 As a project lead, I want the same project as a kanban board, so that stand-ups can walk columns.
@@ -252,29 +254,23 @@ As a project lead, I want to post a status in under a minute, so that I'll actua
 - AC: Status history lives on the project Overview tab, newest first, with author + timestamp.
 - AC: Members of the project's team following it get an in-app notification when a status is posted (§4.6). No automated reminders in MVP (that's rules/automation, Phase 3) — but staleness is surfaced per D2 and pulled via the My Tasks owner-nudge block (B5, PD-9).
 
-**D4. Portfolio timeline view (simplified per PD-2 — decided now, not end of Sprint 2).**
-As a program lead, I want the portfolio's projects as bars on a shared time axis, so that sequencing and overlap are obvious.
-- AC: Horizontal timeline: one row per project, **read-only bar** spanning start → end date, colored by current status color, project name label, owner avatar on the row. **Single fixed month-granularity axis** (no zoom presets), month gridlines, "today" line, plain horizontal scroll over a bounded window (−6 to +18 months) — no virtualization.
-- AC: Projects missing start or end date render in a "Not scheduled" tray below the chart with **inline date editing in the tray** (and dates remain editable on the project itself); setting dates moves the bar onto the timeline. This — not bar dragging — is how dates get fixed in MVP.
-- AC: Explicitly **not** in MVP (moved to Phase 1 per PD-2/PD-23): bar drag-move/drag-resize, zoom presets and zoom animation, weekend shading, virtualization, keyboard nudge/resize.
-- AC: Also explicitly **not** in MVP: task-level rows, cross-project dependency lines, milestones on the timeline, critical path. This is a portfolio-of-projects view, not a Gantt.
+**D4. Portfolio schedule view (re-cut to the pre-agreed floor per D-022; was the PD-2 read-only bar timeline).**
+As a program lead, I want the portfolio's projects laid against time, so that sequencing and overlap are obvious.
+- AC: **Date-ordered schedule table** (the R2 fallback floor, now the plan of record): one row per project — name, status chip, owner, start → end dates (inline-editable), and a **proportional mini date-bar cell** (a simple horizontal span within the row indicating the project's window relative to the portfolio's overall range, colored by status; "today" tick included). Sorted by start date; undated projects group at the bottom with inline date editing.
+- AC: This satisfies cross-project visibility for the pilot; the full **bar-on-axis timeline** (rows on a shared month axis, today line, tray) moves to Phase 1, and drag-editing/zoom stays Phase 1 as before (PD-2).
+- AC: Explicitly **not** in MVP (unchanged): task-level rows, cross-project dependency lines, milestones, critical path, drag/zoom.
 
-**D5. Portfolio-level status (added per PD-12; PE sizing: ≤1 day).**
-As a program lead, I want to set an overall status on the portfolio itself, so that I can report the program upward the same way projects report to me.
-- Sizing basis: this is **literally the D3 composer pointed at a portfolio** (same enum, same title/body/plain-text model, same history list) — one polymorphic target or a second FK, one chip on the portfolio header, no new components. If implementation exceeds 1 day, it drops per the one-in-one-out rule (PD-39) and the Designer removes the chip.
-- AC: Portfolio header shows an overall status chip (manual, set via the D3 composer); history on the portfolio view; same 7-day staleness treatment as D2. Portfolio status does **not** auto-derive from member projects in MVP.
+**D5. Portfolio-level status — CUT from MVP (D-022 funding; was PD-12's conditional add).**
+Deferred to Phase 1 unchanged in design (the D3 composer retargeted at a portfolio). The portfolio header carries no status chip in MVP; the Designer removes it per the PD-12 contingency already written into the design doc.
 
 ### 4.5 Module: Search & navigation
 
 **E1. Global navigation.**
 - AC: Persistent left sidebar: My Tasks (with badge), Notifications (with unread badge), Portfolios (list), Teams → their projects (collapsible), + New buttons. Recently visited projects float to a "Recent" cluster at top.
-- AC: Top bar: global search, "+ New" (task/project/portfolio), user menu (profile: name, password change; admin sees Members & Invites).
+- AC: Top bar: "+ New" (task/project/portfolio), user menu (profile: name, password change; admin sees Members & Invites). Global search is cut from MVP (D-022, see E2); the sidebar org switcher (A1) appears only for multi-org users.
 
-**E2. Global search.**
-As a member, I want to find any task or project by name fast, so that navigation never blocks me.
-- AC: Search field (shortcut `/` or Ctrl/Cmd-K) with typeahead over **task titles, project names, portfolio names** (prefix + substring, case-insensitive). **MVP mechanism (PD-28): `ILIKE`/`pg_trgm` trigram matching on title/name columns — no `tsvector`/GIN full-text in the MVP schema; tsvector arrives in Phase 1 with descriptions/comments.** No external search engine. Results grouped by type, show project context for tasks, keyboard navigable, Enter opens. This is plain search, **not** a command palette — no creation verbs or actions (PD-5).
-- AC: Archived projects and completed tasks excluded from default results; "include completed/archived" toggle on the full results page.
-- AC: Full-text search of descriptions/comments is **out** (Phase 1, with reporting).
+**E2. Global search — CUT from MVP (D-022 funding; moves to Phase 1 as previously specced).**
+For the pilot, navigation is the sidebar (teams → projects, portfolios, Recent cluster) plus browser find-in-page — adequate at pilot scale (≤ a few dozen projects). When it returns in Phase 1 it is unchanged from the PD-28/PD-5 ruling: plain Ctrl+K typeahead over titles/names via `ILIKE`/`pg_trgm` (org-scoped under RLS), no command palette, tsvector later with descriptions/comments.
 
 ### 4.6 Module: Notifications (in-app only)
 
@@ -293,12 +289,16 @@ Locked roadmap phases: **Phase 1** dashboards/reporting → **Phase 2** Entra ID
 
 | Cut item | Lands in | Note |
 |---|---|---|
+| Portfolio **bar timeline** (bars on a month axis, today line, tray) | Phase 1 — first item | D-022: MVP ships the D4 date-ordered schedule table with mini date-bars instead |
+| Portfolio-level status (D5) | Phase 1 | D-022; design unchanged (D3 composer retargeted) |
+| Global search (Ctrl+K typeahead) | Phase 1 | D-022; PD-28/PD-5 spec unchanged when it returns |
+| Project templates ("Simple ops checklist") | Phase 1 | D-022; sample project remains the teaching vehicle |
 | Dashboards / charts / universal reporting | Phase 1 | Portfolio table (D2) is the only "report" in MVP |
 | Custom fields (user-defined) | Phase 1 | §3.2; schema designed for it now |
 | Full-text search (descriptions/comments), filters/saved views | Phase 1 | MVP search = ILIKE/trigram on titles/names only |
 | Rich text (descriptions, comments, status bodies) | Phase 1 | MVP = plain text + auto-linked URLs everywhere (PD-8) |
 | Timeline drag-editing (bar move/resize), zoom presets | Phase 1 | MVP timeline = read-only bars, fixed month zoom (PD-2) |
-| CSV/JSON export UI (general) | Phase 1 | **Exception — MVP stretch (PD-11): one endpoint, "Export portfolio roll-up table as CSV", reusing the D2 query; first claim on Sprint-3 slack (~0.5 day)** |
+| CSV/JSON export UI (general) | Phase 1 | Stretch ladder **cancelled by D-022** — the PD-11 CSV stretch and PD-4 SSE stretch both move to Phase 1; Sprint-3 slack is consumed by the tenancy re-architecture |
 | Lark sign-in (OAuth, toggleable via `AUTH_LARK_ENABLED`) | Week 7 — first post-MVP item (D-020) | Provider framework + toggles + identity table ship inside the MVP; only the Lark provider itself is deferred; supports Lark and Feishu tenants via configurable base URL |
 | Entra ID SSO (OIDC/SAML), SCIM deprovisioning | Phase 2 | MVP = email/password + invites only; multi-provider framework ready (Lark proves the seam in week 7) |
 | Teams app/tabs/bot, Outlook add-in, email notifications, calendar sync | Phase 2 | Benchmark M365 specifics are the blueprint |
@@ -369,11 +369,11 @@ Pilot: 4 weeks post-launch (weeks 7–10), whole team invited, ≥ 2 real progra
 
 ## Appendix A — MVP scope summary (one screen, for sprint planning)
 
-**In (6 weeks):** first-run org setup (+ sample project) · email/password auth · invites · member admin · teams · projects (create with templates/edit/archive/overview) · sections · list view (inline edit on 5 fixed columns, drag, quick-add, section grouping only) · board view (drag, same data) · My Tasks (Overdue-first + status-nudge block) · tasks (assignee, due date, priority, plain-text description) · subtasks (1 level) · comments + @mentions + activity stream (plain text) · attachments (25 MB, local volume) · portfolios (create, add projects, manual order) · portfolio roll-up table with status chips + 7-day staleness + progress · project status updates (4 colors, copy-previous, history) · portfolio status (D5, ≤1 day or cut) · portfolio timeline (read-only project bars, fixed month zoom, today line, dates-editable tray) · global nav + search (ILIKE/trigram on titles/names) · in-app notifications (6 event types).
+**In (6 weeks, v1.2 / D-022):** multi-tenant org model (org creation gated by `SIGNUP_MODE`, org switcher, RLS isolation — arch §2.3/§10) · email/password auth + multi-provider framework with per-provider toggles (Lark week 7) · invites · member admin · teams · projects (create/edit/archive/overview; sample project seeded; no template picker) · sections · list view (inline edit on 5 fixed columns, drag, quick-add, section grouping only) · board view (drag, same data) · My Tasks (Overdue-first + status-nudge block) · tasks (assignee, due date, priority, plain-text description) · subtasks (1 level) · comments + @mentions + activity stream (plain text) · attachments (25 MB, S3-compatible storage, per-org quota) · portfolios (create, add projects, manual order) · portfolio roll-up table with status chips + 7-day staleness + progress · project status updates (4 colors, copy-previous, history) · **portfolio schedule view (date-ordered table + mini date-bars — the D4 floor)** · global nav (sidebar + Recent; no search) · in-app notifications (6 event types).
 
-**Stretch (Sprint-3 slack, in priority order):** CSV export of portfolio roll-up (PD-11) · SSE realtime (built last, pre-agreed cut to refetch-on-focus per PD-4).
+**Stretch: none — the ladder is cancelled (D-022).** Sprint-3 slack is reserved for tenancy re-architecture integration and hardening.
 
-**Out:** everything in §5.
+**Out:** everything in §5 (now incl. bar timeline, D5, search, templates, CSV, SSE).
 
 ## Appendix B — Open questions (owner → resolve by)
 

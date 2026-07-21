@@ -3,7 +3,7 @@
 **Document:** 04-delivery-plan.md
 **Author:** Project Director
 **Date:** 20 July 2026
-**Status:** v1 — baselined against spec v1.1, architecture Draft v2, design v2 (all PD-1…PD-42 dispositions applied; no open rebuttals)
+**Status:** v1.1 — re-baselined against spec v1.2 + architecture v3.0 (D-022 multi-tenant SaaS re-architecture; see the Re-baseline block in §1). Original baseline: spec v1.1, architecture Draft v2, design v2 (all PD-1…PD-42 dispositions applied; no open rebuttals)
 **Inputs:** 01-product-spec.md (v1.1) · 02-architecture.md (Draft v2) · 03-design.md (v2) · review-pmo.md · pm-tool-benchmark/research-notes.md
 
 ---
@@ -21,7 +21,13 @@
 | **Sprint 3** | Mon 17 Aug – Fri 28 Aug | Timeline, notifications inbox, search UI, onboarding; **feature freeze end of week 5 (Fri 21 Aug)**; week 6 = hardening + pilot prep | Demo 3 — Fri 28 Aug = **pilot go/no-go** |
 | **Pilot** | Mon 31 Aug – Fri 25 Sep | Whole team, ≥2 real programs as portfolios; §7 spec metrics measured from our DB | Pilot exit review w/c 28 Sep |
 
-**MVP definition — FROZEN.** The MVP is spec v1.1 **Appendix A**, verbatim. In: A1–A4, B1–B5, C1–C4, D1–D5 (D5 with its ≤1-day auto-drop rule), E1–E2, F1. Stretch (Sprint-3 slack, in this priority order): (1) portfolio roll-up CSV export (PD-11), (2) SSE realtime with the pre-agreed cut to refetch-on-focus (PD-4). Out: everything in spec §5. Any change to this list goes through the scope-change rule in §4 — no exceptions, including from me.
+**MVP definition — FROZEN (v1.2).** The MVP is spec v1.2 **Appendix A**, verbatim. In: A1–A4 (A1 now multi-tenant with `SIGNUP_MODE` + org switcher), B1–B5, C1–C4, D1–D4 (D4 as the schedule-table floor), E1, F1 — plus the D-022 platform work (RLS isolation, S3 storage, per-org quotas, PgBouncer, worker container, metrics). Cut by D-022: D5, E2 search, project templates, and the entire stretch ladder. Out: everything in spec §5. Any change to this list goes through the scope-change rule in §4 — no exceptions, including from me.
+
+**Re-baseline (D-022) — deltas to the sprint plans below** (the tables retain the v1 baseline for traceability; this block overrides them):
+- **Sprint 1 adds (TL):** RLS policies + per-transaction GUC middleware with the schema (+2d); org slug/status/limits columns; `SIGNUP_MODE` gate in A1. **Sprint 1 cuts (PE):** template picker in B2 (−0.5d).
+- **Sprint 2 adds (TL):** `S3Storage` as the prod provider (+1d, replaces LocalDisk prod-hardening); PgBouncer + worker container in both compose stacks (+1.5d). **Sprint 2 cuts (TL):** E2 trigram search endpoint (−1d). **Sprint 2 cuts (PE):** none — B4/B5/C2–C4/D1–D3 unchanged.
+- **Sprint 3 adds (PE):** org switcher + multi-org context (+1.5d); D4 ships as the schedule-table floor (−1.5d vs bars). **(TL):** `/metrics` endpoint (+0.5d); tenant-isolation suite incl. the layer-1 bug drill (+1d, replaces error-tracking slack item); k6 run now exercises **2 api replicas behind Traefik through PgBouncer**. **Sprint 3 cuts:** D5 (−1d), E2 search UI (−0.5d), stretch ladder cancelled.
+- **Net:** PE −0.5d, TL +5d against ~2d of TL frees — TL runs ~3d hotter than the v1 baseline; this is the accepted cost of "re-architect now" and is why week 6 remains feature-free. Design doc updates (D4 floor, D5/search/template removals, org switcher) land in the Designer's Sprint-1/2 spec batches; where the design doc conflicts with spec v1.2, **the spec wins**.
 
 **Capacity basis (PD-1).** ~27 effective Product Engineer days, ~12–14 part-time Tech Lead days (mostly consumed by infra/auth/CI/hard queries), Designer per the design doc §7 plan, PD part-time governance + pilot. The post-cuts scope sizes to ~28–30 PE-days — it fits **only** because Sprint 3 is deliberately under-committed (§3.3) and the PD-2/3/5/6/7/8 cuts stay cut.
 
@@ -35,6 +41,7 @@
 6. Rollback tested: previous release tag redeployed on staging and verified (§7.3).
 7. Invites work end-to-end (with SMTP if IT confirmed it; copy-paste links otherwise) and the admin runbook (`docs/runbook.md`) is current.
 8. Pilot kickoff deck ready, including the honest-ledger framing of accepted losses vs Asana (spec §6, PD-16).
+9. **Tenant-isolation suite green (D-023)**: two seeded orgs, every endpoint asserted cross-tenant-safe, layer-1 bug drill proves RLS blocks the leak alone; plus a manual two-org smoke on staging (URL-guessing between orgs returns 404s).
 
 ---
 
@@ -161,7 +168,7 @@ Sized for a team of four — five recurring events total, everything else is asy
 
 ---
 
-## 5. Risk register — top 8 delivery risks
+## 5. Risk register — top 10 delivery risks
 
 Merged: Tech Lead's technical register (arch §9) + PMO delivery risks. Reviewed every Monday checkpoint; a fired trigger activates the fallback that week, not after debate.
 
@@ -175,8 +182,10 @@ Merged: Tech Lead's technical register (arch §9) + PMO delivery risks. Reviewed
 | R6 | **Board ordering conflicts** — concurrent drags corrupt or visibly "jump" ordering (arch risk #1) | TL | Med / Med | Server-computed fractional keys only (`/move` API); deterministic tie-breaks; background rebalance; dedicated race-condition integration tests in CI from Sprint 1 | Race tests flaky or a reproducible jump found in Sprint 2 → drop to coarse-grained per-section optimistic locking (409 + refetch on conflict) for MVP; smoother merge behavior becomes Phase-1 work |
 | R7 | **Self-hosting ops failure** — VM not ready, backups don't restore, or upgrade path breaks during pilot (arch risk #5 + delivery) | TL | Low–Med / **Critical** | VM provisioned week 1 (staging on it from Sprint 1); nightly `pg_dump` + attachment snapshots + off-VM sync; restore drill **executed** before go-live (launch criterion 2); weekly CI job restores latest dump + runs migrations; expand→migrate→contract migration discipline; RPO 24 h / RTO 2 h documented | Restore drill fails or backup job misses 2 nights → pilot does not start (launch criterion), or if in-pilot: freeze deploys, fix backup chain within 48 h, PD informs pilot users of the risk window |
 | R8 | **Pilot adoption failure** — the status ritual dies by week 3; flagship metric (≥80% ≤7-day status) starves (the product-level kill risk, spec §7) | PD | Med / **Critical** | PD-9 nudge block + 7-day staleness chips + copy-previous composer are all shipped MVP mechanisms; PD runs the adoption push: kickoff with honest-ledger framing, program leads run Monday reviews **from the portfolio screen**, weekly metric readout from the DB to the Ops Director | Week-8 readout: status cadence < 50% or WAU < 40% → PD triggers the pre-agreed intervention (Ops Director mandates the tool for the two pilot programs, retires the parallel deck immediately); if still failing at pilot exit, the spec §7 kill/pivot criterion fires — stop building, revisit buy (Asana Advanced, $625/mo) |
+| R9 | **Cross-tenant data leak** — the SaaS-killing defect class (arch risk #6) | TL | Low / **Critical** | Double-wall isolation (app filter + RLS); isolation suite + layer-1 bug drill on every PR; CI blocks migrations adding tables without RLS policies; launch criterion 9 | Any isolation test fails or the smoke finds a leak → release blocked, no exceptions; in production: freeze deploys, incident review before the next release |
+| R10 | **Re-architecture eats the runway** — RLS/PgBouncer/S3/tenancy work (~+5 TL days, D-022) squeezes an already-tight plan; RLS×PgBouncer GUC interaction is the known trap | PD | Med / **High** | Deltas explicitly costed in the §1 re-baseline; stretch ladder pre-cancelled; week 6 stays feature-free; GUC-per-transaction covered in the isolation suite from Sprint 1 | Sprint-1 exit misses schema+RLS+auth done → PD invokes one-in-one-out against remaining scope (next candidates, pre-agreed order: subtasks C2 → notifications inbox UI F1-UI, rows keep writing) |
 
-Watchlist (not top-8, reviewed monthly): Prisma raw-SQL drift on the two hand-written queries (integration-tested); framework version churn (pin minors, upgrade between sprints); auth-seam erosion (arch §4.3 acceptance test); attachment volume growth (quota + admin view from day 1).
+Watchlist (not top-10, reviewed monthly): Prisma raw-SQL drift on the two hand-written queries (integration-tested); framework version churn (pin minors, upgrade between sprints); auth-seam erosion (arch §4.3 acceptance test); attachment storage growth (per-org quota + admin view from day 1); RLS+PgBouncer GUC discipline (arch §9 watchlist).
 
 ---
 
@@ -189,7 +198,7 @@ Numbering note: this plan counts the MVP as Phase 1, so spec §5's "Phase 1/2/3/
 **Pilot-window exception (weeks 7–8, D-020):** exactly one build item runs during the pilot — the **Lark OAuth provider** (owner decision), deployed mid-pilot behind `AUTH_LARK_ENABLED` on the multi-provider framework the MVP already ships. ~2–2.5 days, touches only `apps/api/src/auth/**` + the login page (the arch §4.3 acceptance test). Everything else waits for the Phase-2 gate.
 
 ### Phase 2 — Dashboards & reporting (spec "Phase 1") — ~3 sprints (6 weeks)
-- **Headline:** dashboards/charts over projects & portfolios; custom fields (text/number/select, on the field-registry pattern the MVP priority field established); filters + saved views; full-text search (tsvector on descriptions/comments); rich text (descriptions, comments, status bodies); general CSV/JSON export UI; timeline drag-edit + zoom presets (the PD-2 backlog); Phase-1 polish backlog (vanity slugs, command-palette verbs, dark theme).
+- **Headline:** **D-022 restorations first** — portfolio bar timeline (bars on a month axis, today line, tray), portfolio-level status (D5), Ctrl+K search, project templates, CSV export, SSE realtime — then dashboards/charts over projects & portfolios; custom fields (text/number/select, on the field-registry pattern the MVP priority field established); filters + saved views; full-text search (tsvector on descriptions/comments); rich text (descriptions, comments, status bodies); timeline drag-edit + zoom presets (the PD-2 backlog); polish backlog (vanity slugs, command-palette verbs, dark theme).
 - **Gate:** pilot passed — kill/pivot criterion not fired; ≥70% "keep and extend" on the exit survey; status-cadence ≥ 80% weeks 9–10; Ops Director has retired the status deck; top-10 pilot feedback items triaged into this phase's backlog.
 
 ### Phase 3 — Entra ID SSO + Teams/Outlook (spec "Phase 2") — ~3 sprints (6 weeks)
@@ -199,6 +208,10 @@ Numbering note: this plan counts the MVP as Phase 1, so spec §5's "Phase 1/2/3/
 ### Phase 4 — Forms, automations, goals, workload, guests (spec "Phases 3+4") — ~4–5 sprints, sequenced by pull
 - **Headline:** intake forms; rules/automation (incl. status-update reminders that replace the staleness-chip social mechanism); recurring tasks; task dependencies + milestones (the biggest deliberate MVP cut); goals/OKRs; workload/capacity views; guest/external access with private projects + per-project permissions (activating the dormant `projects.private` column); nested portfolios.
 - **Gate:** demonstrated demand — each feature cluster needs named internal users asking for it with a concrete workflow (no speculative builds; the ClickUp cautionary tale from the benchmark); security review before guest access (first externally-facing surface); team size/tooling budget re-confirmed by the Ops Director.
+
+### Phase 5 — Commercial SaaS launch (when/if the owner pulls the trigger; scoped per arch §10.3)
+- **Headline:** billing & entitlements (plan tiers mapped to `organizations.limits`), `SIGNUP_MODE=open` self-serve onboarding, per-tenant data export/deletion self-service, uptime SLO + status page, penetration test, terms/DPA, tier T1→T2 infrastructure per the arch §10.2 triggers (managed Postgres, replicas, observability stack, subdomain-per-org).
+- **Gate:** owner's explicit go decision; ≥1 committed external tenant; tenant-isolation suite + pen test clean; licensing appendix re-audited (D-021); support/on-call model agreed — someone must answer when a paying tenant pages.
 
 ---
 
