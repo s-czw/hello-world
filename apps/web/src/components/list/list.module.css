@@ -1,0 +1,363 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  flex-shrink: 0;
+}
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink-tertiary);
+  margin-bottom: var(--space-1);
+}
+.projectDot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--gray-400);
+  flex-shrink: 0;
+}
+.title {
+  font-size: var(--text-2xl);
+  line-height: var(--text-2xl-lh);
+  font-weight: var(--weight-semibold);
+}
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.tab {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  border: 1px solid transparent;
+}
+.tabActive {
+  background: var(--surface-selected);
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+}
+.tabDisabled {
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+/* ── Table scroll region ────────────────────────────────────────────── */
+.scroll {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+}
+.grid {
+  min-width: 720px;
+  /* complete · name · assignee · due · priority · ⋯ */
+  --list-cols: 28px minmax(220px, 1fr) 168px 132px 128px 40px;
+}
+.colHead {
+  display: grid;
+  grid-template-columns: var(--list-cols);
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-default);
+  height: 32px;
+}
+.colHead > span {
+  font-size: var(--text-xs);
+  line-height: var(--text-xs-lh);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  font-weight: var(--weight-medium);
+  padding: 0 var(--space-3);
+}
+.colName {
+  position: sticky;
+  left: 0;
+  background: var(--surface-raised);
+  z-index: 1;
+}
+
+/* ── Section group ──────────────────────────────────────────────────── */
+.section {
+  border-bottom: 1px solid var(--border-default);
+}
+.section:last-child {
+  border-bottom: none;
+}
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--row-height);
+  padding: 0 var(--space-3);
+  position: sticky;
+  left: 0;
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-default);
+}
+.sectionToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-primary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.sectionToggle:hover {
+  background: var(--surface-hover);
+}
+.caret {
+  display: inline-block;
+  width: 12px;
+  color: var(--ink-tertiary);
+  transition: transform 150ms ease;
+}
+.caretCollapsed {
+  transform: rotate(-90deg);
+}
+.sectionCount {
+  color: var(--ink-tertiary);
+  font-weight: var(--weight-regular);
+  font-size: var(--text-sm);
+}
+.sectionDrop {
+  min-height: 4px;
+}
+.sectionDropOver {
+  background: var(--accent-subtle);
+}
+
+/* ── Task row ───────────────────────────────────────────────────────── */
+.row {
+  display: grid;
+  grid-template-columns: var(--list-cols);
+  align-items: center;
+  height: var(--row-height);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-raised);
+  cursor: default;
+}
+.row:last-child {
+  border-bottom: none;
+}
+.row:hover {
+  background: var(--surface-hover);
+}
+.rowSelected {
+  background: var(--surface-selected);
+  box-shadow: inset 2px 0 0 0 var(--accent);
+}
+.rowSelected:hover {
+  background: var(--surface-selected);
+}
+.rowDragging {
+  opacity: 0.4;
+}
+.rowCompleted .name {
+  text-decoration: line-through;
+  color: var(--ink-tertiary);
+}
+.cell {
+  padding: 0 var(--space-3);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.cellComplete {
+  justify-content: center;
+  padding: 0;
+}
+.nameCell {
+  position: sticky;
+  left: 0;
+  background: inherit;
+  gap: var(--space-1);
+}
+.dragHandle {
+  width: 16px;
+  border: none;
+  background: transparent;
+  color: var(--ink-tertiary);
+  cursor: grab;
+  opacity: 0;
+  font-size: 12px;
+  padding: 0;
+  flex-shrink: 0;
+  touch-action: none;
+}
+.row:hover .dragHandle,
+.dragHandle:focus-visible {
+  opacity: 1;
+}
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--ink-primary);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-1);
+  border-radius: var(--radius-sm);
+}
+.name:hover {
+  background: var(--surface-hover);
+}
+.nameInput {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  font-family: inherit;
+  color: var(--ink-primary);
+}
+.due {
+  font-variant-numeric: tabular-nums;
+}
+.dueOverdue :global(.duetext),
+.dueOverdue {
+  color: var(--status-off-track-ink);
+}
+.rowMenuBtn {
+  border: none;
+  background: transparent;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  font-size: 16px;
+}
+.row:hover .rowMenuBtn,
+.rowMenuBtn:focus-visible,
+.rowMenuBtnOpen {
+  opacity: 1;
+}
+.rowMenuBtn:hover {
+  background: var(--surface-hover);
+  color: var(--ink-primary);
+}
+.rowMenuWrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+/* ── Quick add ──────────────────────────────────────────────────────── */
+.quickAdd {
+  display: grid;
+  grid-template-columns: var(--list-cols);
+  align-items: center;
+  height: var(--row-height);
+  background: var(--surface-raised);
+}
+.quickAddInputCell {
+  position: sticky;
+  left: 0;
+  background: var(--surface-raised);
+  grid-column: 2 / -1;
+  padding: 0 var(--space-3);
+}
+.quickAddInput {
+  width: 100%;
+  height: 28px;
+  border: 1px dashed transparent;
+  background: transparent;
+  font-size: var(--text-md);
+  font-family: inherit;
+  color: var(--ink-primary);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.quickAddInput::placeholder {
+  color: var(--ink-tertiary);
+}
+.quickAddInput:hover {
+  border-color: var(--border-default);
+}
+.quickAddInput:focus {
+  border-style: solid;
+  border-color: var(--border-strong);
+  outline: none;
+}
+.quickAddIcon {
+  display: flex;
+  justify-content: center;
+  color: var(--ink-tertiary);
+}
+
+/* ── Completed subgroup ─────────────────────────────────────────────── */
+.completedToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: var(--row-height);
+  padding: 0 var(--space-3);
+  border: none;
+  border-top: 1px solid var(--border-default);
+  background: var(--surface-raised);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  position: sticky;
+  left: 0;
+}
+.completedToggle:hover {
+  background: var(--surface-hover);
+}
+
+/* ── Drag overlay ───────────────────────────────────────────────────── */
+.overlay {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--row-height);
+  padding: 0 var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  max-width: 420px;
+}
+
+/* ── Empty ──────────────────────────────────────────────────────────── */
+.loading {
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}

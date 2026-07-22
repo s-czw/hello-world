@@ -1,0 +1,26 @@
+{
+  "name": "cairn",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cairn — self-hosted program & project management tool",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "dev:api": "cd apps/api && ./mvnw spring-boot:run",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "gen:client": "pnpm --filter @cairn/api-client gen && pnpm --filter @cairn/api-client build",
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "licenses:node": "node scripts/check-licenses-node.mjs",
+    "licenses:java": "bash scripts/check-licenses-java.sh",
+    "licenses": "pnpm licenses:node && pnpm licenses:java"
+  },
+  "devDependencies": {
+    "license-checker-rseidelsohn": "^5.0.1"
+  }
+}

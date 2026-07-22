@@ -1,0 +1,21 @@
+/*
+ * Self-hosted fonts (docs/03 §2.4) — WOFF2 vendored under src/fonts, no CDN.
+ * Inter (SIL OFL) + JetBrains Mono (SIL OFL). Variable weight axes.
+ * Licenses: src/fonts/Inter-OFL.txt, src/fonts/JetBrainsMono-OFL.txt.
+ */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../fonts/inter-latin-wght-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url("../fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2");
+}

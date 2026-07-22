@@ -1,0 +1,140 @@
+/*
+ * Cairn design tokens — docs/03-design.md §2.2–2.5, LIGHT THEME ONLY (PD-6).
+ * Semantic layer over a primitive palette. MVP ships light only; the dark
+ * mapping from the doc is intentionally NOT emitted here (deferred, not toggleable).
+ */
+
+:root {
+  /* ── §2.2 Color primitives ─────────────────────────────────────────── */
+  --gray-0: #ffffff;
+  --gray-25: #fbfcfd;
+  --gray-50: #f6f8fa;
+  --gray-100: #eef1f5;
+  --gray-200: #e2e7ee;
+  --gray-300: #cbd4e0;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-800: #1e293b;
+  --gray-850: #16202e;
+  --gray-900: #0f1722;
+  --gray-950: #0a0f18;
+
+  --indigo-300: #a5b4fc;
+  --indigo-500: #6366f1;
+  --indigo-600: #4f46e5;
+  --indigo-700: #4338ca;
+
+  /* ── §2.3 Semantic tokens (light = MVP source of truth) ─────────────── */
+  --surface-page: #f6f8fa;
+  --surface-raised: #ffffff;
+  --surface-overlay: #ffffff;
+  --surface-sunken: #eef1f5;
+  --surface-hover: #eef1f5;
+  --surface-selected: #eef2ff;
+
+  --border-default: #e2e7ee;
+  --border-strong: #cbd4e0;
+
+  --ink-primary: #0f1722;
+  --ink-secondary: #475569;
+  --ink-tertiary: #94a3b8;
+  --ink-inverse: #ffffff;
+
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-subtle: #eef2ff;
+  --focus-ring: #4f46e5;
+
+  /* Status colors — project-level health (on_track/at_risk/off_track/on_hold) */
+  --status-on-track-bg: #e7f6ec;
+  --status-on-track-ink: #116932;
+  --status-on-track-bold: #188a42;
+
+  --status-at-risk-bg: #fdf3dc;
+  --status-at-risk-ink: #8a5a00;
+  --status-at-risk-bold: #d97706;
+
+  --status-off-track-bg: #fdecec;
+  --status-off-track-ink: #b42328;
+  --status-off-track-bold: #dc2f34;
+
+  --status-on-hold-bg: #f3edfb;
+  --status-on-hold-ink: #6d3ab8;
+  --status-on-hold-bold: #7c3aed;
+
+  --status-none-bg: #eef1f5;
+  --status-none-ink: #475569;
+  --status-none-bold: #94a3b8;
+
+  /* Priority — task-level (none/low/medium/high) */
+  --priority-high: #d97706;
+  --priority-medium: #4f46e5;
+  --priority-low: #94a3b8;
+
+  /* Avatar identity palette (8 hues, all >= 4.5:1 with white initials) */
+  --avatar-0: #4f46e5;
+  --avatar-1: #0e7490;
+  --avatar-2: #188a42;
+  --avatar-3: #b45309;
+  --avatar-4: #be185d;
+  --avatar-5: #7c3aed;
+  --avatar-6: #b42328;
+  --avatar-7: #334155;
+
+  /* ── §2.4 Typography ────────────────────────────────────────────────── */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+
+  --text-2xl: 1.5rem; /* 24 */
+  --text-2xl-lh: 2rem; /* 32 */
+  --text-xl: 1.25rem; /* 20 */
+  --text-xl-lh: 1.75rem; /* 28 */
+  --text-lg: 1rem; /* 16 */
+  --text-lg-lh: 1.5rem; /* 24 */
+  --text-md: 0.875rem; /* 14 */
+  --text-md-lh: 1.25rem; /* 20 */
+  --text-sm: 0.8125rem; /* 13 */
+  --text-sm-lh: 1.125rem; /* 18 */
+  --text-xs: 0.6875rem; /* 11 */
+  --text-xs-lh: 1rem; /* 16 */
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* ── §2.5 Spacing (4px base) ────────────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+
+  /* Density constants */
+  --row-height: 36px;
+  --card-min-height: 68px;
+  --sidebar-item-height: 32px;
+  --input-height: 32px;
+  --input-height-modal: 40px;
+  --topbar-height: 48px;
+  --sidebar-width: 240px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 9999px;
+
+  /* Elevation (light theme) */
+  --shadow-1: 0 1px 2px rgb(15 23 34 / 0.06), 0 1px 3px rgb(15 23 34 / 0.08);
+  --shadow-2: 0 4px 12px rgb(15 23 34 / 0.1), 0 1px 3px rgb(15 23 34 / 0.06);
+  --shadow-3: 0 12px 32px rgb(15 23 34 / 0.16), 0 2px 8px rgb(15 23 34 / 0.08);
+}

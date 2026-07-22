@@ -1,0 +1,268 @@
+/* ── Complete toggle (circle + check) ──────────────────────────────── */
+.completeToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.toggleCircle {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 2;
+  transition:
+    fill 200ms ease,
+    stroke 200ms ease;
+}
+.toggleCheck {
+  fill: none;
+  stroke: var(--status-on-track-bold);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.completeToggle:hover .toggleCircle {
+  stroke: var(--status-on-track-bold);
+}
+.completeToggle[data-completed="true"] .toggleCircle {
+  fill: var(--status-on-track-bold);
+  stroke: var(--status-on-track-bold);
+}
+.completeToggle[data-completed="true"] .toggleCheck {
+  stroke: var(--ink-inverse);
+  stroke-dashoffset: 0;
+}
+
+/* ── Priority ──────────────────────────────────────────────────────── */
+.priorityFlag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+.priorityNone {
+  font-size: var(--text-sm);
+  color: var(--ink-tertiary);
+}
+.priorityPlaceholder {
+  font-size: var(--text-sm);
+  color: var(--ink-tertiary);
+}
+
+/* ── Option lists (pickers) ────────────────────────────────────────── */
+.optionList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-2);
+  min-height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
+  color: var(--ink-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.option:hover {
+  background: var(--surface-hover);
+}
+.optionCheck {
+  margin-left: auto;
+  color: var(--accent);
+}
+.optionEmpty {
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink-tertiary);
+}
+.assigneePop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.assigneeValue {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.assigneeName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Task side-peek ────────────────────────────────────────────────── */
+.peek {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.peekHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+.peekCompleteLabel {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+.peekActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  position: relative;
+}
+.peekScroll {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.peekTitle {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--text-xl);
+  line-height: var(--text-xl-lh);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-primary);
+  resize: none;
+  padding: var(--space-2);
+  font-family: inherit;
+}
+.peekTitle:hover {
+  border-color: var(--border-default);
+}
+.peekTitle:focus {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+.peekTitleDone {
+  text-decoration: line-through;
+  color: var(--ink-tertiary);
+}
+.peekGrid {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  align-items: center;
+  gap: var(--space-3) var(--space-3);
+}
+.peekLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+}
+.peekSectionTitle {
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  font-weight: var(--weight-medium);
+  margin-bottom: var(--space-2);
+}
+.peekDesc {
+  width: 100%;
+  min-height: 96px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-md);
+  line-height: var(--text-md-lh);
+  color: var(--ink-primary);
+  resize: vertical;
+  font-family: inherit;
+}
+.descDisplay {
+  min-height: 96px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
+  line-height: var(--text-md-lh);
+  color: var(--ink-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+.descDisplay:hover {
+  border-color: var(--border-default);
+}
+.descPlaceholder {
+  color: var(--ink-tertiary);
+}
+
+/* ── ⋯ menu (peek + row) ───────────────────────────────────────────── */
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 200px;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-1);
+  z-index: 320;
+}
+.menuItem {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  min-height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
+  color: var(--ink-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.menuItem:hover {
+  background: var(--surface-hover);
+}
+.menuItemDanger {
+  color: var(--status-off-track-ink);
+}
+.menuLabel {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  font-weight: var(--weight-medium);
+}
+.menuSep {
+  height: 1px;
+  background: var(--border-default);
+  margin: var(--space-1) 0;
+}

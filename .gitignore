@@ -1,0 +1,40 @@
+# Node
+node_modules/
+.pnpm-store/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# Java / Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# jOOQ generated sources (regenerated on build)
+**/generated-sources/jooq/
+
+# OpenAPI build temp (the committed spec is apps/api/openapi.json — do NOT ignore that)
+openapi-tmp/
+*.openapi.tmp.json
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Playwright E2E artifacts
+test-results/
+playwright-report/
+blob-report/
+.playwright/

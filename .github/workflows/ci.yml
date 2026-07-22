@@ -1,0 +1,206 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  JAVA_VERSION: "21"
+  PNPM_VERSION: "10"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # (a) API — unit (mvn verify, unit lane) then integration against real Postgres
+  # ---------------------------------------------------------------------------
+  api:
+    name: api (mvn verify + integration)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cairn
+          POSTGRES_PASSWORD: cairn
+          POSTGRES_DB: cairn_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cairn"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK ${{ env.JAVA_VERSION }} (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Unit tests + build (unit lane)
+        working-directory: apps/api
+        run: ./mvnw -B -q verify
+      - name: Integration tests (real Postgres)
+        working-directory: apps/api
+        env:
+          TEST_JDBC_URL: jdbc:postgresql://cairn:cairn@127.0.0.1:5432/cairn_test
+        run: ./mvnw -B -q -Pintegration verify
+
+  # ---------------------------------------------------------------------------
+  # (b) Web — install, typecheck, lint, build
+  # ---------------------------------------------------------------------------
+  web:
+    name: web (typecheck + lint + build)
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build api-client (topological prereq for web)
+        run: pnpm --filter @cairn/api-client build
+      - name: Typecheck
+        run: pnpm --filter web typecheck
+      - name: Lint
+        run: pnpm --filter web lint
+      - name: Build
+        run: pnpm --filter web build
+
+  # ---------------------------------------------------------------------------
+  # (c) Client drift — regenerate openapi.json + typed client, expect no diff
+  # ---------------------------------------------------------------------------
+  client-drift:
+    name: client-drift (openapi + api-client)
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK ${{ env.JAVA_VERSION }} (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Regenerate OpenAPI spec (spec-writer test, DB-independent)
+        working-directory: apps/api
+        run: ./mvnw -B -q -Dtest=OpenApiSpecWriterTest -DfailIfNoTests=false test
+      - name: Regenerate typed API client
+        run: pnpm gen:client
+      - name: Fail if the committed spec/client is stale
+        run: |
+          git diff --exit-code apps/api/openapi.json packages/api-client \
+            || { echo "::error::openapi.json / api-client is stale — run 'pnpm gen:client' (after regenerating the spec) and commit."; exit 1; }
+
+  # ---------------------------------------------------------------------------
+  # (d) Licenses — D-021 gate for both ecosystems
+  # ---------------------------------------------------------------------------
+  licenses:
+    name: licenses (node + java)
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK ${{ env.JAVA_VERSION }} (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Node license gate
+        run: node scripts/check-licenses-node.mjs
+      - name: Java license gate
+        run: bash scripts/check-licenses-java.sh
+
+  # ---------------------------------------------------------------------------
+  # (e) Smoke — full stack E2E (Postgres service, api jar + web, Playwright)
+  # ---------------------------------------------------------------------------
+  smoke:
+    name: smoke (playwright E2E)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cairn
+          POSTGRES_PASSWORD: cairn
+          POSTGRES_DB: cairn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cairn"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK ${{ env.JAVA_VERSION }} (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: pnpm install --frozen-lockfile
+      - name: Build API jar (skip tests — covered by the api job)
+        working-directory: apps/api
+        run: ./mvnw -B -q -DskipTests package
+      - name: Build web (+ api-client)
+        run: pnpm -r build
+      - name: Install Playwright chromium
+        run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: Run E2E smoke
+        env:
+          DB_URL: jdbc:postgresql://127.0.0.1:5432/cairn
+          DATABASE_URL: postgres://cairn:cairn@127.0.0.1:5432/cairn
+        run: node scripts/run-e2e.mjs
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
