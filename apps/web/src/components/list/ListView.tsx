@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Drawer } from "@/components/ui/Drawer";
 import { anyPopoverOpen } from "@/components/ui/Popover";
 import { TaskPeek } from "@/components/task/TaskPeek";
+import { ProjectHeader } from "@/components/project/ProjectHeader";
 import { SectionGroup } from "./SectionGroup";
 import {
   useProject,
@@ -366,40 +367,7 @@ export function ListView({ projectId }: { projectId: string }) {
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.header}>
-        <div>
-          <div className={styles.breadcrumb}>Projects</div>
-          <h1 className={styles.title}>
-            <span
-              className={styles.projectDot}
-              style={project.data?.color ? { background: project.data.color } : undefined}
-              aria-hidden="true"
-            />
-            {project.data?.name ?? "Project"}
-          </h1>
-          <div className={styles.tabs} role="tablist" aria-label="Project views">
-            <span className={`${styles.tab} ${styles.tabActive}`} role="tab" aria-selected="true">
-              List
-            </span>
-            <span
-              className={`${styles.tab} ${styles.tabDisabled}`}
-              role="tab"
-              aria-disabled="true"
-              title="Board view — M2"
-            >
-              Board
-            </span>
-            <span
-              className={`${styles.tab} ${styles.tabDisabled}`}
-              role="tab"
-              aria-disabled="true"
-              title="Overview — M3"
-            >
-              Overview
-            </span>
-          </div>
-        </div>
-      </div>
+      <ProjectHeader projectId={projectId} active="list" />
 
       {loading ? (
         <div className={styles.scroll}>

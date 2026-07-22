@@ -65,8 +65,9 @@ public abstract class IntegrationTestBase {
     @BeforeEach
     void truncateAll() {
         jdbc.execute(
-                "TRUNCATE tasks, sections, projects, team_members, teams, invites, auth_sessions,"
-                        + " memberships, users, organizations RESTART IDENTITY CASCADE");
+                "TRUNCATE project_status_updates, portfolio_projects, portfolios, tasks, sections, projects,"
+                        + " team_members, teams, invites, auth_sessions, memberships, users, organizations"
+                        + " RESTART IDENTITY CASCADE");
     }
 
     // ---- helpers ------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Cairn M1 end-to-end smoke.
+ * Cairn M1 + M2 end-to-end smoke.
  *
  * Runs against a freshly-reset `cairn` DB with the API + web servers already up
  * (see scripts/run-e2e.mjs). Exercises the full first-run happy path:
@@ -10,6 +10,11 @@ import { test, expect, type Page } from "@playwright/test";
  *   (assignee/due/description) → drag + ⋯-menu reorder → complete a task (motion)
  *   → My Tasks shows the correct due-date groups → open a task from My Tasks back
  *   into the project side-peek.
+ *
+ * Then the M2 layer, on top of the same project:
+ *   create a portfolio → add the project → post a status update via the composer
+ *   (opened from the roll-up chip) → the roll-up chip reflects the posted status
+ *   → open the project board → drag a card between columns.
  *
  * Any console.error / pageerror other than the known-benign Next.js RSC-prefetch
  * abort message fails the test.
@@ -34,6 +39,7 @@ test("M1 happy path: bootstrap → project → tasks → my-tasks", async ({ pag
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 
   const uniq = Date.now();
+  let projectId = "";
   const row = (title: string) =>
     page.locator("[data-row-id]").filter({ hasText: title }).first();
 
@@ -54,6 +60,8 @@ test("M1 happy path: bootstrap → project → tasks → my-tasks", async ({ pag
     await page.getByLabel("Name").fill("Launch");
     await page.getByRole("button", { name: "Create project" }).click();
     await page.waitForURL("**/projects/**/list", { timeout: 15000 });
+    projectId = page.url().match(/projects\/([0-9a-f-]{36})/)?.[1] ?? "";
+    expect(projectId, "captured the new project id").not.toEqual("");
     await page.getByRole("button", { name: /To do/ }).waitFor();
     await page.getByRole("button", { name: /In progress/ }).waitFor();
   });
@@ -186,6 +194,83 @@ test("M1 happy path: bootstrap → project → tasks → my-tasks", async ({ pag
     await page.getByRole("button", { name: "Write copy" }).first().click();
     await page.waitForURL("**/projects/**/list?task=**", { timeout: 10000 });
     await page.getByRole("dialog", { name: "Task detail" }).waitFor();
+    await page.keyboard.press("Escape");
+  });
+
+  // ── M2: portfolio roll-up + status composer + board drag ──────────────────
+
+  // 10) Create a portfolio and add the project to it
+  await test.step("portfolio: create + add the project", async () => {
+    await page.goto("/portfolios");
+    await page.getByRole("heading", { name: "Portfolios" }).waitFor();
+    // Empty state → New portfolio → modal.
+    await page.getByRole("button", { name: "New portfolio" }).first().click();
+    const dlg = page.getByRole("dialog", { name: "New portfolio" });
+    await dlg.waitFor();
+    await dlg.getByLabel("Name").fill("Q3 Delivery");
+    await dlg.getByRole("button", { name: "Create portfolio" }).click();
+    await page.waitForURL(/\/portfolios\/[0-9a-f-]{36}$/, { timeout: 15000 });
+
+    // No-projects empty state → add the project via the typeahead.
+    await page.getByText("Add projects to this portfolio").waitFor();
+    await page.getByRole("button", { name: "+ Add projects" }).first().click();
+    await page.getByPlaceholder("Search projects").fill("Launch");
+    await page.getByRole("option", { name: "Launch" }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("tbody tr")).toHaveCount(1);
+    // Scope to the roll-up table (the sidebar also links the project by name).
+    await page.locator("tbody").getByRole("link", { name: "Launch" }).waitFor();
+  });
+
+  // 11) Post a status update via the composer (opened from the roll-up chip)
+  await test.step("portfolio: post a status update via composer", async () => {
+    // Chip starts grey ("No status"); clicking it opens the composer.
+    await page.getByRole("button", { name: /^Status:/ }).first().click();
+    const composer = page.getByRole("dialog", { name: "Update status" });
+    await composer.waitFor();
+    await composer.getByRole("radio", { name: "On track" }).click();
+    await composer.getByLabel("Update").fill("Kickoff complete; on track for Q3.");
+    await composer.getByRole("button", { name: "Post update" }).click();
+    await composer.waitFor({ state: "hidden" });
+    // Roll-up chip now reflects the posted status.
+    await page
+      .getByRole("button", { name: /Status: On track/ })
+      .first()
+      .waitFor({ timeout: 10000 });
+  });
+
+  // 12) Open the project board (via the view-switcher tab)
+  await test.step("open the project board", async () => {
+    await page.goto(`/projects/${projectId}/list`);
+    await page.getByRole("navigation", { name: "Project views" }).waitFor();
+    await page.getByRole("link", { name: "Board" }).click();
+    await page.waitForURL("**/board", { timeout: 10000 });
+    for (const s of ["To do", "In progress"]) {
+      await page.getByRole("region", { name: s }).waitFor({ timeout: 10000 });
+    }
+    await page.getByRole("button", { name: "Open Write copy" }).waitFor();
+  });
+
+  // 13) Drag a card between columns (To do → In progress)
+  await test.step("board: drag a card between columns", async () => {
+    const toDo = page.getByRole("region", { name: "To do" });
+    const inProg = page.getByRole("region", { name: "In progress" });
+    const before = await inProg.getByRole("button", { name: /^Open / }).count();
+    const card = toDo.getByRole("button", { name: "Open Write copy" });
+    const cb = await card.boundingBox();
+    const tb = await inProg.boundingBox();
+    if (!cb || !tb) throw new Error("missing board bounding boxes");
+    await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2);
+    await page.mouse.down();
+    // Past the 4px activation threshold, then into the target column well.
+    await page.mouse.move(cb.x + cb.width / 2 + 20, cb.y + cb.height / 2 + 5, { steps: 5 });
+    await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2, { steps: 10 });
+    await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2 + 10, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForTimeout(800);
+    await expect(inProg.getByRole("button", { name: "Open Write copy" })).toBeVisible();
+    const after = await inProg.getByRole("button", { name: /^Open / }).count();
+    expect(after, "In progress column grew after the cross-column drop").toBeGreaterThan(before);
   });
 
   expect(errors, "no unexpected console errors during the smoke").toEqual([]);

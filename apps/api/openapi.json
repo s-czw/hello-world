@@ -36,6 +36,18 @@
         },
         "type" : "object"
       },
+      "AddProjectRequest" : {
+        "properties" : {
+          "projectId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "projectId"
+        ],
+        "type" : "object"
+      },
       "ApiResponseAcceptedInviteResponse" : {
         "properties" : {
           "data" : {
@@ -112,6 +124,23 @@
         },
         "type" : "object"
       },
+      "ApiResponseListPortfolioResponse" : {
+        "properties" : {
+          "data" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PortfolioResponse"
+            },
+            "type" : "array"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseListProjectResponse" : {
         "properties" : {
           "data" : {
@@ -134,6 +163,23 @@
           "data" : {
             "items" : {
               "$ref" : "#/components/schemas/SectionResponse"
+            },
+            "type" : "array"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseListStatusUpdateResponse" : {
+        "properties" : {
+          "data" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StatusUpdateResponse"
             },
             "type" : "array"
           },
@@ -211,6 +257,20 @@
         },
         "type" : "object"
       },
+      "ApiResponsePortfolioResponse" : {
+        "properties" : {
+          "data" : {
+            "$ref" : "#/components/schemas/PortfolioResponse"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseProjectResponse" : {
         "properties" : {
           "data" : {
@@ -225,10 +285,38 @@
         },
         "type" : "object"
       },
+      "ApiResponseRollupResponse" : {
+        "properties" : {
+          "data" : {
+            "$ref" : "#/components/schemas/RollupResponse"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseSectionResponse" : {
         "properties" : {
           "data" : {
             "$ref" : "#/components/schemas/SectionResponse"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseStatusUpdateResponse" : {
+        "properties" : {
+          "data" : {
+            "$ref" : "#/components/schemas/StatusUpdateResponse"
           },
           "meta" : {
             "additionalProperties" : {
@@ -333,6 +421,33 @@
         ],
         "type" : "object"
       },
+      "CreatePortfolioRequest" : {
+        "properties" : {
+          "color" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "description" : {
+            "maxLength" : 4000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "ownerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "name"
+        ],
+        "type" : "object"
+      },
       "CreateProjectRequest" : {
         "properties" : {
           "color" : {
@@ -378,6 +493,27 @@
         },
         "required" : [
           "name"
+        ],
+        "type" : "object"
+      },
+      "CreateStatusUpdateRequest" : {
+        "properties" : {
+          "body" : {
+            "maxLength" : 10000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "title" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "status"
         ],
         "type" : "object"
       },
@@ -510,6 +646,19 @@
         },
         "type" : "object"
       },
+      "MoveProjectRequest" : {
+        "properties" : {
+          "afterId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "beforeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "MoveSectionRequest" : {
         "properties" : {
           "afterSectionId" : {
@@ -584,19 +733,13 @@
         },
         "type" : "object"
       },
-      "ProjectResponse" : {
+      "PortfolioResponse" : {
         "properties" : {
-          "archived" : {
-            "type" : "boolean"
-          },
           "color" : {
             "type" : "string"
           },
           "createdAt" : {
             "format" : "date-time",
-            "type" : "string"
-          },
-          "defaultView" : {
             "type" : "string"
           },
           "description" : {
@@ -612,10 +755,151 @@
           "ownerId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ProjectResponse" : {
+        "properties" : {
+          "archived" : {
+            "type" : "boolean"
+          },
+          "color" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currentStatus" : {
+            "type" : "string"
+          },
+          "defaultView" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "endDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "ownerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "startDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "statusUpdatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
           },
           "teamId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RollupProjectResponse" : {
+        "properties" : {
+          "color" : {
+            "type" : "string"
+          },
+          "currentStatus" : {
+            "type" : "string"
+          },
+          "endDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "ownerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "ownerName" : {
+            "type" : "string"
+          },
+          "projectId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "stale" : {
+            "type" : "boolean"
+          },
+          "startDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "statusUpdatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "tasksComplete" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tasksTotal" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "RollupResponse" : {
+        "properties" : {
+          "portfolio" : {
+            "$ref" : "#/components/schemas/PortfolioResponse"
+          },
+          "projects" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RollupProjectResponse"
+            },
+            "type" : "array"
+          },
+          "summary" : {
+            "$ref" : "#/components/schemas/RollupSummary"
+          }
+        },
+        "type" : "object"
+      },
+      "RollupSummary" : {
+        "properties" : {
+          "atRisk" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "noUpdate" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "offTrack" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "onHold" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "onTrack" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "total" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -656,6 +940,36 @@
         "required" : [
           "memberIds"
         ],
+        "type" : "object"
+      },
+      "StatusUpdateResponse" : {
+        "properties" : {
+          "authorId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "body" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "projectId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "TaskResponse" : {
@@ -740,6 +1054,24 @@
         },
         "type" : "object"
       },
+      "UpdatePortfolioRequest" : {
+        "properties" : {
+          "color" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "ownerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "UpdateProjectRequest" : {
         "properties" : {
           "archived" : {
@@ -754,11 +1086,19 @@
           "description" : {
             "type" : "string"
           },
+          "endDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
           "name" : {
             "type" : "string"
           },
           "ownerId" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "startDate" : {
+            "format" : "date",
             "type" : "string"
           },
           "teamId" : {
@@ -1001,7 +1341,7 @@
     },
     "/api/v1/invites" : {
       "get" : {
-        "operationId" : "list_3",
+        "operationId" : "list_4",
         "parameters" : [
           {
             "in" : "query",
@@ -1038,7 +1378,7 @@
         ]
       },
       "post" : {
-        "operationId" : "create_4",
+        "operationId" : "create_6",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -1137,6 +1477,305 @@
         },
         "tags" : [
           "me-tasks-controller"
+        ]
+      }
+    },
+    "/api/v1/portfolios" : {
+      "get" : {
+        "operationId" : "list_3",
+        "parameters" : [
+          {
+            "in" : "query",
+            "name" : "cursor",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "limit",
+            "required" : false,
+            "schema" : {
+              "format" : "int32",
+              "type" : "integer"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListPortfolioResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "portfolio-controller"
+        ]
+      },
+      "post" : {
+        "operationId" : "create_5",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreatePortfolioRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponsePortfolioResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "portfolio-controller"
+        ]
+      }
+    },
+    "/api/v1/portfolios/{id}" : {
+      "delete" : {
+        "operationId" : "delete_4",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "portfolio-controller"
+        ]
+      },
+      "get" : {
+        "operationId" : "get_2",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponsePortfolioResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "portfolio-controller"
+        ]
+      },
+      "patch" : {
+        "operationId" : "update_4",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdatePortfolioRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponsePortfolioResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "portfolio-controller"
+        ]
+      }
+    },
+    "/api/v1/portfolios/{id}/projects" : {
+      "post" : {
+        "operationId" : "addProject",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddProjectRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "portfolio-controller"
+        ]
+      }
+    },
+    "/api/v1/portfolios/{id}/projects/{projectId}" : {
+      "delete" : {
+        "operationId" : "removeProject",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "path",
+            "name" : "projectId",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "portfolio-controller"
+        ]
+      }
+    },
+    "/api/v1/portfolios/{id}/projects/{projectId}/move" : {
+      "post" : {
+        "operationId" : "moveProject",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "path",
+            "name" : "projectId",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MoveProjectRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "portfolio-controller"
+        ]
+      }
+    },
+    "/api/v1/portfolios/{id}/rollup" : {
+      "get" : {
+        "operationId" : "rollup",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseRollupResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "portfolio-controller"
         ]
       }
     },
@@ -1339,7 +1978,7 @@
         ]
       },
       "post" : {
-        "operationId" : "create_3",
+        "operationId" : "create_4",
         "parameters" : [
           {
             "in" : "path",
@@ -1375,6 +2014,93 @@
         },
         "tags" : [
           "section-controller"
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/status-updates" : {
+      "get" : {
+        "operationId" : "history",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "projectId",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "cursor",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "limit",
+            "required" : false,
+            "schema" : {
+              "format" : "int32",
+              "type" : "integer"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListStatusUpdateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "project-status-update-controller"
+        ]
+      },
+      "post" : {
+        "operationId" : "create_3",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "projectId",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateStatusUpdateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseStatusUpdateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "project-status-update-controller"
         ]
       }
     },
@@ -1884,7 +2610,7 @@
     },
     "/api/v1/users" : {
       "get" : {
-        "operationId" : "list_4",
+        "operationId" : "list_5",
         "parameters" : [
           {
             "in" : "query",

@@ -171,6 +171,25 @@ class ProjectsTasksIntegrationTest extends IntegrationTestBase {
         assertThat(data.get(0).get("projectId").asText()).isEqualTo(projectA.toString());
     }
 
+    // --- default sections seeded on project create (spec B2) ------------------
+
+    @Test
+    void newProjectSeedsThreeDefaultSections() throws Exception {
+        Cookie[] admin = bootstrap();
+        UUID teamId = generalTeamId();
+        UUID projectId = createProject(admin, "Fresh", teamId);
+
+        MvcResult r = mockMvc.perform(get("/api/v1/projects/" + projectId + "/sections").cookie(admin))
+                .andExpect(status().isOk())
+                .andReturn();
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (JsonNode s : body(r).get("data")) {
+            names.add(s.get("name").asText());
+        }
+        // exactly the three defaults, in order (fractional keys spaced by rebalance)
+        assertThat(names).containsExactly("To do", "In progress", "Done");
+    }
+
     // --- section delete requires empty or moveTo ------------------------------
 
     @Test

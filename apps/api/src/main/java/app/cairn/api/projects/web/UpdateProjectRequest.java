@@ -1,5 +1,6 @@
 package app.cairn.api.projects.web;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -23,6 +24,10 @@ public class UpdateProjectRequest {
     private boolean ownerPresent;
     private UUID teamId;
     private boolean teamPresent;
+    private LocalDate startDate;
+    private boolean startDatePresent;
+    private LocalDate endDate;
+    private boolean endDatePresent;
 
     public String getName() {
         return name;
@@ -113,5 +118,31 @@ public class UpdateProjectRequest {
 
     public boolean teamPresent() {
         return teamPresent;
+    }
+
+    public LocalDate getStartDate() {
+        return startDate;
+    }
+
+    public void setStartDate(LocalDate startDate) {
+        this.startDate = startDate;
+        this.startDatePresent = true;
+    }
+
+    public boolean startDatePresent() {
+        return startDatePresent;
+    }
+
+    public LocalDate getEndDate() {
+        return endDate;
+    }
+
+    public void setEndDate(LocalDate endDate) {
+        this.endDate = endDate;
+        this.endDatePresent = true;
+    }
+
+    public boolean endDatePresent() {
+        return endDatePresent;
     }
 }

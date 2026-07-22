@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { components } from "@cairn/api-client";
 import { useMyTasks } from "@/lib/tasks";
+import { usePortfolios } from "@/lib/portfolio";
 import { dueBucket } from "@/lib/dates";
 import styles from "./shell.module.css";
 
@@ -32,6 +33,8 @@ export function Sidebar() {
       return (data?.data ?? []) as Project[];
     },
   });
+
+  const portfolios = usePortfolios();
 
   const myTasks = useMyTasks();
   const badge = (myTasks.data ?? []).filter((t) => {
@@ -70,6 +73,46 @@ export function Sidebar() {
             </span>
           )}
         </Link>
+
+        <div className={styles.sectionLabel}>
+          Portfolios
+          <Link
+            href="/portfolios/new"
+            className={styles.navItem}
+            style={{ height: "auto", padding: "0 6px" }}
+            aria-label="New portfolio"
+          >
+            +
+          </Link>
+        </div>
+
+        {(portfolios.data ?? []).length === 0 && !portfolios.isLoading && (
+          <div className={styles.sidebarEmpty}>No portfolios yet</div>
+        )}
+
+        {(portfolios.data ?? []).map((pf) => {
+          const active = pathname.startsWith(`/portfolios/${pf.id}`);
+          return (
+            <Link
+              key={pf.id}
+              href={`/portfolios/${pf.id}`}
+              className={[
+                styles.navItem,
+                styles.projectItem,
+                active ? styles.navItemActive : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <span
+                className={styles.projectDot}
+                style={pf.color ? { background: pf.color } : undefined}
+                aria-hidden="true"
+              />
+              {pf.name}
+            </Link>
+          );
+        })}
 
         <div className={styles.sectionLabel}>
           Teams

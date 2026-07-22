@@ -35,6 +35,10 @@ public class ProjectRepository {
             r.get(PROJECTS.COLOR),
             r.get(PROJECTS.DEFAULT_VIEW),
             Boolean.TRUE.equals(r.get(PROJECTS.ARCHIVED)),
+            r.get(PROJECTS.START_DATE),
+            r.get(PROJECTS.END_DATE),
+            r.get(PROJECTS.CURRENT_STATUS),
+            r.get(PROJECTS.STATUS_UPDATED_AT),
             r.get(PROJECTS.CREATED_AT));
 
     public UUID insert(
@@ -112,12 +116,29 @@ public class ProjectRepository {
         if (u.teamSet()) {
             changes.put(PROJECTS.TEAM_ID, u.teamId());
         }
+        if (u.startDateSet()) {
+            changes.put(PROJECTS.START_DATE, u.startDate());
+        }
+        if (u.endDateSet()) {
+            changes.put(PROJECTS.END_DATE, u.endDate());
+        }
         if (changes.isEmpty()) {
             return exists(id) ? 1 : 0;
         }
         return db.dsl()
                 .update(PROJECTS)
                 .set(changes)
+                .where(db.orgFilter(PROJECTS))
+                .and(PROJECTS.ID.eq(id))
+                .execute();
+    }
+
+    /** Denormalize the project's current status + timestamp (written in the status-update tx, D3). */
+    public int updateStatus(UUID id, String status, java.time.OffsetDateTime statusUpdatedAt) {
+        return db.dsl()
+                .update(PROJECTS)
+                .set(PROJECTS.CURRENT_STATUS, status)
+                .set(PROJECTS.STATUS_UPDATED_AT, statusUpdatedAt)
                 .where(db.orgFilter(PROJECTS))
                 .and(PROJECTS.ID.eq(id))
                 .execute();

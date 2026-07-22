@@ -107,9 +107,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_3"];
+        get: operations["list_4"];
         put?: never;
-        post: operations["create_4"];
+        post: operations["create_6"];
         delete?: never;
         options?: never;
         head?: never;
@@ -164,6 +164,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_3"];
+        put?: never;
+        post: operations["create_5"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_2"];
+        put?: never;
+        post?: never;
+        delete: operations["delete_4"];
+        options?: never;
+        head?: never;
+        patch: operations["update_4"];
+        trace?: never;
+    };
+    "/api/v1/portfolios/{id}/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/{id}/projects/{projectId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeProject"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/{id}/projects/{projectId}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["moveProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/{id}/rollup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["rollup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -204,6 +300,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_2"];
+        put?: never;
+        post: operations["create_4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/status-updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["history"];
         put?: never;
         post: operations["create_3"];
         delete?: never;
@@ -347,7 +459,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_4"];
+        get: operations["list_5"];
         put?: never;
         post?: never;
         delete?: never;
@@ -418,6 +530,10 @@ export interface components {
             /** Format: uuid */
             userId?: string;
         };
+        AddProjectRequest: {
+            /** Format: uuid */
+            projectId: string;
+        };
         ApiResponseAcceptedInviteResponse: {
             data?: components["schemas"]["AcceptedInviteResponse"];
             meta?: {
@@ -448,6 +564,12 @@ export interface components {
                 [key: string]: Record<string, never>;
             };
         };
+        ApiResponseListPortfolioResponse: {
+            data?: components["schemas"]["PortfolioResponse"][];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
         ApiResponseListProjectResponse: {
             data?: components["schemas"]["ProjectResponse"][];
             meta?: {
@@ -456,6 +578,12 @@ export interface components {
         };
         ApiResponseListSectionResponse: {
             data?: components["schemas"]["SectionResponse"][];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        ApiResponseListStatusUpdateResponse: {
+            data?: components["schemas"]["StatusUpdateResponse"][];
             meta?: {
                 [key: string]: Record<string, never>;
             };
@@ -484,14 +612,32 @@ export interface components {
                 [key: string]: Record<string, never>;
             };
         };
+        ApiResponsePortfolioResponse: {
+            data?: components["schemas"]["PortfolioResponse"];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
         ApiResponseProjectResponse: {
             data?: components["schemas"]["ProjectResponse"];
             meta?: {
                 [key: string]: Record<string, never>;
             };
         };
+        ApiResponseRollupResponse: {
+            data?: components["schemas"]["RollupResponse"];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
         ApiResponseSectionResponse: {
             data?: components["schemas"]["SectionResponse"];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        ApiResponseStatusUpdateResponse: {
+            data?: components["schemas"]["StatusUpdateResponse"];
             meta?: {
                 [key: string]: Record<string, never>;
             };
@@ -526,6 +672,13 @@ export interface components {
         CreateInviteRequest: {
             email: string;
         };
+        CreatePortfolioRequest: {
+            color?: string;
+            description?: string;
+            name: string;
+            /** Format: uuid */
+            ownerId?: string;
+        };
         CreateProjectRequest: {
             color?: string;
             defaultView?: string;
@@ -538,6 +691,11 @@ export interface components {
         };
         CreateSectionRequest: {
             name: string;
+        };
+        CreateStatusUpdateRequest: {
+            body?: string;
+            status: string;
+            title?: string;
         };
         CreateTaskRequest: {
             /** Format: uuid */
@@ -584,6 +742,12 @@ export interface components {
             orgName?: string;
             role?: string;
         };
+        MoveProjectRequest: {
+            /** Format: uuid */
+            afterId?: string;
+            /** Format: uuid */
+            beforeId?: string;
+        };
         MoveSectionRequest: {
             /** Format: uuid */
             afterSectionId?: string;
@@ -617,20 +781,78 @@ export interface components {
             sectionId?: string;
             title?: string;
         };
-        ProjectResponse: {
-            archived?: boolean;
+        PortfolioResponse: {
             color?: string;
             /** Format: date-time */
             createdAt?: string;
-            defaultView?: string;
             description?: string;
             /** Format: uuid */
             id?: string;
             name?: string;
             /** Format: uuid */
             ownerId?: string;
+        };
+        ProjectResponse: {
+            archived?: boolean;
+            color?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            currentStatus?: string;
+            defaultView?: string;
+            description?: string;
+            /** Format: date */
+            endDate?: string;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            /** Format: uuid */
+            ownerId?: string;
+            /** Format: date */
+            startDate?: string;
+            /** Format: date-time */
+            statusUpdatedAt?: string;
             /** Format: uuid */
             teamId?: string;
+        };
+        RollupProjectResponse: {
+            color?: string;
+            currentStatus?: string;
+            /** Format: date */
+            endDate?: string;
+            name?: string;
+            /** Format: uuid */
+            ownerId?: string;
+            ownerName?: string;
+            /** Format: uuid */
+            projectId?: string;
+            stale?: boolean;
+            /** Format: date */
+            startDate?: string;
+            /** Format: date-time */
+            statusUpdatedAt?: string;
+            /** Format: int32 */
+            tasksComplete?: number;
+            /** Format: int32 */
+            tasksTotal?: number;
+        };
+        RollupResponse: {
+            portfolio?: components["schemas"]["PortfolioResponse"];
+            projects?: components["schemas"]["RollupProjectResponse"][];
+            summary?: components["schemas"]["RollupSummary"];
+        };
+        RollupSummary: {
+            /** Format: int32 */
+            atRisk?: number;
+            /** Format: int32 */
+            noUpdate?: number;
+            /** Format: int32 */
+            offTrack?: number;
+            /** Format: int32 */
+            onHold?: number;
+            /** Format: int32 */
+            onTrack?: number;
+            /** Format: int32 */
+            total?: number;
         };
         SectionResponse: {
             /** Format: date-time */
@@ -644,6 +866,19 @@ export interface components {
         };
         SetTeamMembersRequest: {
             memberIds: string[];
+        };
+        StatusUpdateResponse: {
+            /** Format: uuid */
+            authorId?: string;
+            body?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            projectId?: string;
+            status?: string;
+            title?: string;
         };
         TaskResponse: {
             /** Format: uuid */
@@ -679,14 +914,25 @@ export interface components {
             memberIds?: string[];
             name?: string;
         };
+        UpdatePortfolioRequest: {
+            color?: string;
+            description?: string;
+            name?: string;
+            /** Format: uuid */
+            ownerId?: string;
+        };
         UpdateProjectRequest: {
             archived?: boolean;
             color?: string;
             defaultView?: string;
             description?: string;
+            /** Format: date */
+            endDate?: string;
             name?: string;
             /** Format: uuid */
             ownerId?: string;
+            /** Format: date */
+            startDate?: string;
             /** Format: uuid */
             teamId?: string;
         };
@@ -856,7 +1102,7 @@ export interface operations {
             };
         };
     };
-    list_3: {
+    list_4: {
         parameters: {
             query?: {
                 cursor?: string;
@@ -879,7 +1125,7 @@ export interface operations {
             };
         };
     };
-    create_4: {
+    create_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -963,6 +1209,213 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseListMyTaskResponse"];
+                };
+            };
+        };
+    };
+    list_3: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListPortfolioResponse"];
+                };
+            };
+        };
+    };
+    create_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePortfolioRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePortfolioResponse"];
+                };
+            };
+        };
+    };
+    get_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePortfolioResponse"];
+                };
+            };
+        };
+    };
+    delete_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePortfolioRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePortfolioResponse"];
+                };
+            };
+        };
+    };
+    addProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    removeProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    moveProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MoveProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rollup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseRollupResponse"];
                 };
             };
         };
@@ -1105,7 +1558,7 @@ export interface operations {
             };
         };
     };
-    create_3: {
+    create_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -1127,6 +1580,57 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseSectionResponse"];
+                };
+            };
+        };
+    };
+    history: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListStatusUpdateResponse"];
+                };
+            };
+        };
+    };
+    create_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStatusUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseStatusUpdateResponse"];
                 };
             };
         };
@@ -1469,7 +1973,7 @@ export interface operations {
             };
         };
     };
-    list_4: {
+    list_5: {
         parameters: {
             query?: {
                 cursor?: string;

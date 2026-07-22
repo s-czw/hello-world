@@ -26,8 +26,6 @@ const COLORS = [
   "#334155",
 ];
 
-const DEFAULT_SECTIONS = ["To do", "In progress", "Done"];
-
 export default function NewProjectPage() {
   const router = useRouter();
   const qc = useQueryClient();
@@ -82,13 +80,8 @@ export default function NewProjectPage() {
       return;
     }
     const project = data.data as Project;
-    // Seed the three default sections (B2 AC) so the list is usable immediately.
-    for (const s of DEFAULT_SECTIONS) {
-      await api.POST("/api/v1/projects/{projectId}/sections", {
-        params: { path: { projectId: project.id! } },
-        body: { name: s },
-      });
-    }
+    // The API seeds the three default sections (To do / In progress / Done)
+    // server-side on create (spec B2) — no client seeding, else we'd get six.
     await qc.invalidateQueries({ queryKey: ["projects"] });
     toast.success("Project created");
     router.push(`/projects/${project.id}/list`);

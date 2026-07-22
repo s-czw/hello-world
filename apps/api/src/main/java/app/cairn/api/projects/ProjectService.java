@@ -70,6 +70,9 @@ public class ProjectService {
         return projects.metaByIds(ids);
     }
 
+    /** The three sections every new project starts with (spec B2 AC). */
+    private static final List<String> DEFAULT_SECTIONS = List.of("To do", "In progress", "Done");
+
     @Transactional
     public Project create(
             AuthPrincipal caller,
@@ -85,7 +88,16 @@ public class ProjectService {
         String view = defaultView == null ? "list" : defaultView;
         requireValidView(view);
         UUID id = projects.insert(teamId, owner, name.trim(), trimToNull(description), trimToNull(color), view);
+        seedDefaultSections(id);
         return projects.findById(id).orElseThrow();
+    }
+
+    /** Seed the three default sections in order with short, evenly-spaced fractional keys (spec B2). */
+    private void seedDefaultSections(UUID projectId) {
+        List<String> keys = app.cairn.api.tasks.ordering.Ordering.rebalance(DEFAULT_SECTIONS.size());
+        for (int i = 0; i < DEFAULT_SECTIONS.size(); i++) {
+            sections.insert(projectId, DEFAULT_SECTIONS.get(i), keys.get(i));
+        }
     }
 
     @Transactional
@@ -103,6 +115,11 @@ public class ProjectService {
         if (req.defaultViewPresent() && req.getDefaultView() != null) {
             requireValidView(req.getDefaultView());
         }
+        if (req.startDatePresent() && req.endDatePresent()
+                && req.getStartDate() != null && req.getEndDate() != null
+                && req.getEndDate().isBefore(req.getStartDate())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "endDate must not be before startDate");
+        }
         ProjectUpdate u = new ProjectUpdate(
                 req.namePresent(), req.getName() == null ? null : req.getName().trim(),
                 req.descriptionPresent(), trimToNull(req.getDescription()),
@@ -110,7 +127,9 @@ public class ProjectService {
                 req.defaultViewPresent(), req.getDefaultView(),
                 req.archivedPresent(), req.getArchived(),
                 req.ownerPresent(), req.getOwnerId(),
-                req.teamPresent(), req.getTeamId());
+                req.teamPresent(), req.getTeamId(),
+                req.startDatePresent(), req.getStartDate(),
+                req.endDatePresent(), req.getEndDate());
         projects.update(id, u);
         return projects.findById(id).orElseThrow();
     }
