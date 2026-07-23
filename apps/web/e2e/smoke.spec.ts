@@ -1,7 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
 /**
- * Cairn M1 + M2 end-to-end smoke.
+ * Cairn M1 + M2 + M3 end-to-end smoke.
  *
  * Runs against a freshly-reset `cairn` DB with the API + web servers already up
  * (see scripts/run-e2e.mjs). Exercises the full first-run happy path:
@@ -16,11 +20,30 @@ import { test, expect, type Page } from "@playwright/test";
  *   (opened from the roll-up chip) → the roll-up chip reflects the posted status
  *   → open the project board → drag a card between columns.
  *
+ * Then the M3 layer, on top of the same project:
+ *   invite + accept a second member (Bob) via the API → open a task peek → add a
+ *   subtask and complete it (progress 0/1 → 1/1) → post a comment that @mentions
+ *   Bob → upload a small .txt attachment and re-download it through the authz'd
+ *   URL (200 + Content-Disposition: attachment + X-Content-Type-Options: nosniff
+ *   + byte match) → log in as Bob in a fresh context and confirm the bell badge +
+ *   the notifications inbox show the @mention.
+ *
  * Any console.error / pageerror other than the known-benign Next.js RSC-prefetch
  * abort message fails the test.
  */
 
 const BENIGN = [/Failed to fetch RSC payload/, /Falling back to browser navigation/];
+
+/** Attach the console.error / pageerror guard used by the whole smoke. */
+function attachErrorGuard(p: Page, errors: string[]): void {
+  p.on("console", (m) => {
+    if (m.type() !== "error") return;
+    const t = m.text();
+    if (BENIGN.some((re) => re.test(t))) return;
+    errors.push("console.error: " + t);
+  });
+  p.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+}
 
 function isoOffset(days: number): string {
   const d = new Date();
@@ -28,15 +51,9 @@ function isoOffset(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-test("M1 happy path: bootstrap → project → tasks → my-tasks", async ({ page }) => {
+test("M1 happy path: bootstrap → project → tasks → my-tasks", async ({ page, browser }) => {
   const errors: string[] = [];
-  page.on("console", (m) => {
-    if (m.type() !== "error") return;
-    const t = m.text();
-    if (BENIGN.some((re) => re.test(t))) return;
-    errors.push("console.error: " + t);
-  });
-  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  attachErrorGuard(page, errors);
 
   const uniq = Date.now();
   let projectId = "";
@@ -271,6 +288,122 @@ test("M1 happy path: bootstrap → project → tasks → my-tasks", async ({ pag
     await expect(inProg.getByRole("button", { name: "Open Write copy" })).toBeVisible();
     const after = await inProg.getByRole("button", { name: /^Open / }).count();
     expect(after, "In progress column grew after the cross-column drop").toBeGreaterThan(before);
+  });
+
+  // ── M3: subtasks + comment @mention + attachment + notification ────────────
+
+  const bobEmail = `bob${uniq}@example.com`;
+  const peek = () => page.getByRole("dialog", { name: "Task detail" });
+
+  // 14) Seed a second org member (Bob) through the API — Ada is authenticated,
+  //     so page.request carries her session cookies via the same-origin rewrite.
+  await test.step("seed a second member (invite + accept)", async () => {
+    const inv = await page.request.post("/api/v1/invites", { data: { email: bobEmail } });
+    expect(inv.ok(), "invite created").toBeTruthy();
+    const acceptUrl: string = (await inv.json()).data.acceptUrl;
+    const token = new URL(acceptUrl, "http://placeholder").searchParams.get("token");
+    expect(token, "invite token present in acceptUrl").toBeTruthy();
+    const acc = await page.request.post("/api/v1/invites/accept", {
+      data: { token, name: "Bob Builder", password: "password123" },
+    });
+    expect(acc.ok(), "invite accepted").toBeTruthy();
+  });
+
+  // 15) Open a task peek in the list (a fresh nav refetches the member list so
+  //     the @mention typeahead knows about Bob).
+  await test.step("open a task peek", async () => {
+    await page.goto(`/projects/${projectId}/list`);
+    await page.getByRole("button", { name: "Set up analytics" }).first().click();
+    await peek().waitFor();
+    await peek().getByText("Mark complete").waitFor();
+  });
+
+  // 16) Add a subtask, then complete it (progress 0/1 → 1/1).
+  await test.step("add + complete a subtask", async () => {
+    await peek().getByRole("button", { name: "+ Add subtask" }).click();
+    await peek().getByLabel("New subtask name").fill("Draft outline");
+    await peek().getByLabel("New subtask name").press("Enter");
+    await peek().getByRole("button", { name: "Draft outline" }).waitFor({ timeout: 10000 });
+    await peek().getByText("0/1", { exact: true }).waitFor({ timeout: 10000 });
+    const subRow = peek()
+      .locator("li")
+      .filter({ has: page.getByRole("button", { name: "Draft outline" }) });
+    await subRow.getByRole("button", { name: "Mark complete" }).click();
+    await peek().getByText("1/1", { exact: true }).waitFor({ timeout: 10000 });
+  });
+
+  // 17) Post a comment that @mentions Bob (via the typeahead).
+  await test.step("comment with an @mention", async () => {
+    const composer = peek().getByRole("textbox", { name: "Add a comment" });
+    await composer.click();
+    await page.keyboard.type("Reviewing with ");
+    await page.keyboard.type("@bob");
+    const opt = peek().getByRole("option", { name: /Bob Builder/ });
+    await opt.waitFor({ timeout: 10000 });
+    await opt.click();
+    await composer.focus();
+    await page.keyboard.press("End");
+    await page.keyboard.type("please take a look");
+    await page.keyboard.press("Control+Enter");
+    await peek()
+      .locator("span")
+      .filter({ hasText: "@Bob Builder" })
+      .first()
+      .waitFor({ timeout: 10000 });
+  });
+
+  // 18) Upload a small .txt attachment, then re-download it through the API's
+  //     authz'd streaming route (never a direct/static URL).
+  await test.step("upload + re-download a .txt attachment", async () => {
+    await peek()
+      .locator('input[aria-label="Attach files"]')
+      .setInputFiles(path.join(FIXTURES, "note.txt"));
+    await peek().getByText("note.txt", { exact: true }).waitFor({ timeout: 15000 });
+    const href = await peek()
+      .getByText("note.txt", { exact: true })
+      .locator("xpath=ancestor::a[1]")
+      .getAttribute("href");
+    expect(href, "attachment download href present").toBeTruthy();
+    const dl = await page.request.get(href!);
+    expect(dl.status(), "download returns 200").toBe(200);
+    expect(dl.headers()["content-disposition"] ?? "").toContain("attachment");
+    expect(dl.headers()["x-content-type-options"] ?? "").toBe("nosniff");
+    expect(await dl.text()).toContain("Cairn M3 smoke attachment");
+    await peek().getByRole("button", { name: "Close" }).click();
+    await peek().waitFor({ state: "hidden" });
+  });
+
+  // 19) The second user sees the @mention notification (bell badge + inbox).
+  await test.step("second user sees the notification", async () => {
+    const origin = new URL(page.url()).origin;
+    const bobCtx = await browser.newContext({ baseURL: origin });
+    const bob = await bobCtx.newPage();
+    attachErrorGuard(bob, errors);
+    try {
+      await bob.goto("/login");
+      await bob.getByLabel("Email").fill(bobEmail);
+      await bob.getByLabel("Password").fill("password123");
+      await bob.getByRole("button", { name: "Sign in" }).click();
+      await bob.waitForURL("**/my-tasks", { timeout: 15000 });
+
+      // Sidebar bell badge shows the unread count.
+      const badge = bob
+        .locator('a[href="/notifications"] span')
+        .filter({ hasText: /^(\d+|9\+)$/ });
+      await expect(badge.first(), "bell badge shows 1 unread").toHaveText("1", {
+        timeout: 10000,
+      });
+
+      // Inbox row = the @mention sentence.
+      await bob.goto("/notifications");
+      await bob.getByRole("heading", { name: "Notifications" }).waitFor();
+      await expect(
+        bob.getByText(/mentioned you in a comment/).first(),
+        "inbox shows the @mention",
+      ).toBeVisible({ timeout: 10000 });
+    } finally {
+      await bobCtx.close();
+    }
   });
 
   expect(errors, "no unexpected console errors during the smoke").toEqual([]);

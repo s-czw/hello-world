@@ -36,6 +36,41 @@
         },
         "type" : "object"
       },
+      "ActivityStreamEntry" : {
+        "properties" : {
+          "action" : {
+            "type" : "string"
+          },
+          "actorId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "body" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "diff" : {
+            "$ref" : "#/components/schemas/JsonNode"
+          },
+          "edited" : {
+            "type" : "boolean"
+          },
+          "editedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AddProjectRequest" : {
         "properties" : {
           "projectId" : {
@@ -62,6 +97,20 @@
         },
         "type" : "object"
       },
+      "ApiResponseAttachmentResponse" : {
+        "properties" : {
+          "data" : {
+            "$ref" : "#/components/schemas/AttachmentResponse"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseBootstrapStatusResponse" : {
         "properties" : {
           "data" : {
@@ -76,10 +125,75 @@
         },
         "type" : "object"
       },
+      "ApiResponseCommentResponse" : {
+        "properties" : {
+          "data" : {
+            "$ref" : "#/components/schemas/CommentResponse"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseCreatedInviteResponse" : {
         "properties" : {
           "data" : {
             "$ref" : "#/components/schemas/CreatedInviteResponse"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseListActivityStreamEntry" : {
+        "properties" : {
+          "data" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ActivityStreamEntry"
+            },
+            "type" : "array"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseListAttachmentResponse" : {
+        "properties" : {
+          "data" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AttachmentResponse"
+            },
+            "type" : "array"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseListCommentResponse" : {
+        "properties" : {
+          "data" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CommentResponse"
+            },
+            "type" : "array"
           },
           "meta" : {
             "additionalProperties" : {
@@ -112,6 +226,23 @@
           "data" : {
             "items" : {
               "$ref" : "#/components/schemas/MyTaskResponse"
+            },
+            "type" : "array"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseListNotificationResponse" : {
+        "properties" : {
+          "data" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NotificationResponse"
             },
             "type" : "array"
           },
@@ -327,6 +458,20 @@
         },
         "type" : "object"
       },
+      "ApiResponseTaskDetailResponse" : {
+        "properties" : {
+          "data" : {
+            "$ref" : "#/components/schemas/TaskDetailResponse"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseTaskResponse" : {
         "properties" : {
           "data" : {
@@ -355,6 +500,20 @@
         },
         "type" : "object"
       },
+      "ApiResponseUnreadCountResponse" : {
+        "properties" : {
+          "data" : {
+            "$ref" : "#/components/schemas/UnreadCountResponse"
+          },
+          "meta" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseUserResponse" : {
         "properties" : {
           "data" : {
@@ -365,6 +524,44 @@
               "type" : "object"
             },
             "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "AttachmentResponse" : {
+        "properties" : {
+          "commentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "contentType" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "downloadUrl" : {
+            "type" : "string"
+          },
+          "fileName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sizeBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "taskId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "uploadedBy" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -406,6 +603,50 @@
             "type" : "boolean"
           }
         },
+        "type" : "object"
+      },
+      "CommentResponse" : {
+        "properties" : {
+          "authorId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "body" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "edited" : {
+            "type" : "boolean"
+          },
+          "editedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "taskId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CreateCommentRequest" : {
+        "properties" : {
+          "body" : {
+            "maxLength" : 10000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "body"
+        ],
         "type" : "object"
       },
       "CreateInviteRequest" : {
@@ -517,6 +758,19 @@
         ],
         "type" : "object"
       },
+      "CreateSubtaskRequest" : {
+        "properties" : {
+          "title" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "title"
+        ],
+        "type" : "object"
+      },
       "CreateTaskRequest" : {
         "properties" : {
           "assigneeId" : {
@@ -600,6 +854,9 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "JsonNode" : {
         "type" : "object"
       },
       "LoginRequest" : {
@@ -733,6 +990,39 @@
         },
         "type" : "object"
       },
+      "NotificationResponse" : {
+        "properties" : {
+          "actorId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "payload" : {
+            "$ref" : "#/components/schemas/JsonNode"
+          },
+          "read" : {
+            "type" : "boolean"
+          },
+          "resourceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "resourceType" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PortfolioResponse" : {
         "properties" : {
           "color" : {
@@ -755,6 +1045,19 @@
           "ownerId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Progress" : {
+        "properties" : {
+          "completed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "total" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -804,6 +1107,15 @@
             "type" : "string"
           },
           "teamId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PromoteTaskRequest" : {
+        "properties" : {
+          "sectionId" : {
             "format" : "uuid",
             "type" : "string"
           }
@@ -972,6 +1284,23 @@
         },
         "type" : "object"
       },
+      "TaskDetailResponse" : {
+        "properties" : {
+          "subtaskProgress" : {
+            "$ref" : "#/components/schemas/Progress"
+          },
+          "subtasks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TaskResponse"
+            },
+            "type" : "array"
+          },
+          "task" : {
+            "$ref" : "#/components/schemas/TaskResponse"
+          }
+        },
+        "type" : "object"
+      },
       "TaskResponse" : {
         "properties" : {
           "assigneeId" : {
@@ -1001,6 +1330,10 @@
             "type" : "string"
           },
           "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "parentTaskId" : {
             "format" : "uuid",
             "type" : "string"
           },
@@ -1052,6 +1385,28 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "UnreadCountResponse" : {
+        "properties" : {
+          "count" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "UpdateCommentRequest" : {
+        "properties" : {
+          "body" : {
+            "maxLength" : 10000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "body"
+        ],
         "type" : "object"
       },
       "UpdatePortfolioRequest" : {
@@ -1206,6 +1561,60 @@
   },
   "openapi" : "3.0.1",
   "paths" : {
+    "/api/v1/attachments/{id}" : {
+      "delete" : {
+        "operationId" : "delete_6",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "attachment-controller"
+        ]
+      },
+      "get" : {
+        "operationId" : "download",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "attachment-controller"
+        ]
+      }
+    },
     "/api/v1/auth/bootstrap" : {
       "post" : {
         "operationId" : "bootstrap",
@@ -1339,9 +1748,72 @@
         ]
       }
     },
+    "/api/v1/comments/{id}" : {
+      "delete" : {
+        "operationId" : "delete_5",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "comment-controller"
+        ]
+      },
+      "patch" : {
+        "operationId" : "update_5",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateCommentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseCommentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "comment-controller"
+        ]
+      }
+    },
     "/api/v1/invites" : {
       "get" : {
-        "operationId" : "list_4",
+        "operationId" : "list_6",
         "parameters" : [
           {
             "in" : "query",
@@ -1378,7 +1850,7 @@
         ]
       },
       "post" : {
-        "operationId" : "create_6",
+        "operationId" : "create_7",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -1480,9 +1952,105 @@
         ]
       }
     },
+    "/api/v1/notifications" : {
+      "get" : {
+        "operationId" : "list_8",
+        "parameters" : [
+          {
+            "in" : "query",
+            "name" : "cursor",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "limit",
+            "required" : false,
+            "schema" : {
+              "format" : "int32",
+              "type" : "integer"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListNotificationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "notification-controller"
+        ]
+      }
+    },
+    "/api/v1/notifications/read-all" : {
+      "post" : {
+        "operationId" : "readAll",
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "notification-controller"
+        ]
+      }
+    },
+    "/api/v1/notifications/unread-count" : {
+      "get" : {
+        "operationId" : "unreadCount",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseUnreadCountResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "notification-controller"
+        ]
+      }
+    },
+    "/api/v1/notifications/{id}/read" : {
+      "post" : {
+        "operationId" : "read",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "notification-controller"
+        ]
+      }
+    },
     "/api/v1/portfolios" : {
       "get" : {
-        "operationId" : "list_3",
+        "operationId" : "list_5",
         "parameters" : [
           {
             "in" : "query",
@@ -1519,7 +2087,7 @@
         ]
       },
       "post" : {
-        "operationId" : "create_5",
+        "operationId" : "create_6",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -1781,7 +2349,7 @@
     },
     "/api/v1/projects" : {
       "get" : {
-        "operationId" : "list_1",
+        "operationId" : "list_3",
         "parameters" : [
           {
             "in" : "query",
@@ -1827,7 +2395,7 @@
         ]
       },
       "post" : {
-        "operationId" : "create_1",
+        "operationId" : "create_2",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -1949,7 +2517,7 @@
     },
     "/api/v1/projects/{projectId}/sections" : {
       "get" : {
-        "operationId" : "list_2",
+        "operationId" : "list_4",
         "parameters" : [
           {
             "in" : "path",
@@ -1978,7 +2546,7 @@
         ]
       },
       "post" : {
-        "operationId" : "create_4",
+        "operationId" : "create_5",
         "parameters" : [
           {
             "in" : "path",
@@ -2065,7 +2633,7 @@
         ]
       },
       "post" : {
-        "operationId" : "create_3",
+        "operationId" : "create_4",
         "parameters" : [
           {
             "in" : "path",
@@ -2152,7 +2720,7 @@
         ]
       },
       "post" : {
-        "operationId" : "create_2",
+        "operationId" : "create_3",
         "parameters" : [
           {
             "in" : "path",
@@ -2345,7 +2913,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ApiResponseTaskResponse"
+                  "$ref" : "#/components/schemas/ApiResponseTaskDetailResponse"
                 }
               }
             },
@@ -2434,6 +3002,292 @@
         },
         "tags" : [
           "task-controller"
+        ]
+      }
+    },
+    "/api/v1/tasks/{id}/promote" : {
+      "post" : {
+        "operationId" : "promote",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PromoteTaskRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseTaskResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "task-controller"
+        ]
+      }
+    },
+    "/api/v1/tasks/{id}/subtasks" : {
+      "post" : {
+        "operationId" : "addSubtask",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateSubtaskRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseTaskResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "task-controller"
+        ]
+      }
+    },
+    "/api/v1/tasks/{taskId}/activity" : {
+      "get" : {
+        "operationId" : "activity",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "taskId",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListActivityStreamEntry"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "activity-controller"
+        ]
+      }
+    },
+    "/api/v1/tasks/{taskId}/attachments" : {
+      "get" : {
+        "operationId" : "list_2",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "taskId",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListAttachmentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "attachment-controller"
+        ]
+      },
+      "post" : {
+        "operationId" : "upload",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "taskId",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "commentId",
+            "required" : false,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [
+                  "file"
+                ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseAttachmentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "attachment-controller"
+        ]
+      }
+    },
+    "/api/v1/tasks/{taskId}/comments" : {
+      "get" : {
+        "operationId" : "list_1",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "taskId",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "cursor",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "limit",
+            "required" : false,
+            "schema" : {
+              "format" : "int32",
+              "type" : "integer"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListCommentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "comment-controller"
+        ]
+      },
+      "post" : {
+        "operationId" : "create_1",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "taskId",
+            "required" : true,
+            "schema" : {
+              "format" : "uuid",
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateCommentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseCommentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [
+          "comment-controller"
         ]
       }
     },
@@ -2610,7 +3464,7 @@
     },
     "/api/v1/users" : {
       "get" : {
-        "operationId" : "list_5",
+        "operationId" : "list_7",
         "parameters" : [
           {
             "in" : "query",

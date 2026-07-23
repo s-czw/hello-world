@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import type { components } from "@cairn/api-client";
 import { useMyTasks } from "@/lib/tasks";
 import { usePortfolios } from "@/lib/portfolio";
+import { useUnreadCount } from "@/lib/notifications";
 import { dueBucket } from "@/lib/dates";
 import styles from "./shell.module.css";
 
@@ -42,6 +43,10 @@ export function Sidebar() {
     return b === "Overdue" || b === "Today";
   }).length;
 
+  const unread = useUnreadCount();
+  const unreadCount = unread.data ?? 0;
+  const unreadLabel = unreadCount > 9 ? "9+" : String(unreadCount);
+
   const byTeam = new Map<string, Project[]>();
   for (const p of projects.data ?? []) {
     const list = byTeam.get(p.teamId ?? "") ?? [];
@@ -70,6 +75,43 @@ export function Sidebar() {
           {badge > 0 && (
             <span className={styles.badge} aria-label={`${badge} due or overdue`}>
               {badge}
+            </span>
+          )}
+        </Link>
+
+        <Link
+          href="/notifications"
+          className={[
+            styles.navItem,
+            pathname === "/notifications" ? styles.navItemActive : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <span className={styles.bellIcon} aria-hidden="true">
+            {/* bell (single-weight line) */}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M8 1.5a3.5 3.5 0 0 0-3.5 3.5c0 3-1.2 4-1.5 4.5h10c-.3-.5-1.5-1.5-1.5-4.5A3.5 3.5 0 0 0 8 1.5Z"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M6.5 12a1.5 1.5 0 0 0 3 0"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
+          <span className={styles.navItemLabel}>Notifications</span>
+          {unreadCount > 0 && (
+            <span
+              className={styles.unreadBadge}
+              aria-label={`${unreadCount} unread`}
+            >
+              {unreadLabel}
             </span>
           )}
         </Link>

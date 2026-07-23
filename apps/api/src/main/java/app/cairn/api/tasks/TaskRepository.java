@@ -43,6 +43,8 @@ public class TaskRepository {
                 r.get(TASKS.COMPLETED_AT),
                 r.get(TASKS.CREATED_BY),
                 r.get(TASKS.SORT_KEY),
+                r.get(TASKS.PARENT_TASK_ID),
+                r.get(TASKS.SUBTASK_SORT_KEY),
                 r.get(TASKS.CREATED_AT),
                 r.get(TASKS.UPDATED_AT));
     }
@@ -82,13 +84,91 @@ public class TaskRepository {
         return db.selectFrom(TASKS).and(TASKS.ID.eq(id)).fetchOptional(TaskRepository::toTask);
     }
 
+    // --- subtasks (C2) --------------------------------------------------------
+
+    /** Insert a subtask under {@code parentTaskId}. section_id is null; sort_key mirrors the subtask key. */
+    public UUID insertSubtask(
+            UUID projectId, UUID parentTaskId, UUID assigneeId, String title, UUID createdBy, String subtaskSortKey) {
+        TasksRecord rec = db.newRecord(TASKS);
+        UUID id = Uuid7.generate();
+        rec.setId(id);
+        rec.setProjectId(projectId);
+        rec.setSectionId(null);
+        rec.setAssigneeId(assigneeId);
+        rec.setTitle(title);
+        rec.setPriority("none");
+        rec.setCompleted(false);
+        rec.setCreatedBy(createdBy);
+        rec.setSortKey(subtaskSortKey);
+        rec.setParentTaskId(parentTaskId);
+        rec.setSubtaskSortKey(subtaskSortKey);
+        rec.insert();
+        return id;
+    }
+
+    /** Subtasks of a parent, ordered by their subtask sort key (then created order). */
+    public List<Task> subtasksByParent(UUID parentTaskId) {
+        return db.selectFrom(TASKS)
+                .and(TASKS.PARENT_TASK_ID.eq(parentTaskId))
+                .orderBy(TASKS.SUBTASK_SORT_KEY.asc(), TASKS.CREATED_AT.asc(), TASKS.ID.asc())
+                .fetch(TaskRepository::toTask);
+    }
+
+    public List<UUID> subtaskIds(UUID parentTaskId) {
+        return db.selectFrom(TASKS).and(TASKS.PARENT_TASK_ID.eq(parentTaskId)).fetch(TASKS.ID);
+    }
+
+    public Optional<String> maxSubtaskSortKey(UUID parentTaskId) {
+        Condition where = db.orgFilter(TASKS).and(TASKS.PARENT_TASK_ID.eq(parentTaskId));
+        return Optional.ofNullable(
+                db.dsl().select(DSL.max(TASKS.SUBTASK_SORT_KEY)).from(TASKS).where(where).fetchOne(0, String.class));
+    }
+
+    /** {total, completed} subtask counts for a parent, in one query. */
+    public int[] subtaskProgress(UUID parentTaskId) {
+        Condition where = db.orgFilter(TASKS).and(TASKS.PARENT_TASK_ID.eq(parentTaskId));
+        Record r = db.dsl()
+                .select(DSL.count(),
+                        DSL.count().filterWhere(TASKS.COMPLETED.isTrue()))
+                .from(TASKS)
+                .where(where)
+                .fetchOne();
+        int total = r == null ? 0 : r.get(0, int.class);
+        int completed = r == null ? 0 : r.get(1, int.class);
+        return new int[] {total, completed};
+    }
+
+    /** Promote a subtask to a full task: clear the parent link and place it in a section. */
+    public int promote(UUID id, UUID sectionId, String sortKey) {
+        return db.dsl()
+                .update(TASKS)
+                .set(TASKS.PARENT_TASK_ID, (UUID) null)
+                .set(TASKS.SUBTASK_SORT_KEY, (String) null)
+                .set(TASKS.SECTION_ID, sectionId)
+                .set(TASKS.SORT_KEY, sortKey)
+                .set(TASKS.UPDATED_AT, OffsetDateTime.now())
+                .where(db.orgFilter(TASKS))
+                .and(TASKS.ID.eq(id))
+                .execute();
+    }
+
+    /** Top-level (non-subtask) task ids in a project — the cascade-delete roots. */
+    public List<UUID> topLevelIdsInProject(UUID projectId) {
+        return db.selectFrom(TASKS)
+                .and(TASKS.PROJECT_ID.eq(projectId))
+                .and(TASKS.PARENT_TASK_ID.isNull())
+                .fetch(TASKS.ID);
+    }
+
     // --- grouped project list (ordered by section sort_key, then task sort_key, then created_at, id) ---
 
     public List<TaskWithSectionKey> pageByProject(UUID projectId, TaskCursor after, int limit) {
         Field<String> secExpr = DSL.coalesce(SECTIONS.SORT_KEY, DSL.val(""));
         Field<String> secSel = secExpr.as("section_sort_key");
 
-        Condition where = db.orgFilter(TASKS).and(TASKS.PROJECT_ID.eq(projectId));
+        // The flat project list shows top-level tasks only; subtasks appear within their parent.
+        Condition where =
+                db.orgFilter(TASKS).and(TASKS.PROJECT_ID.eq(projectId)).and(TASKS.PARENT_TASK_ID.isNull());
         if (after != null) {
             where = where.and(DSL.row(secExpr, TASKS.SORT_KEY, TASKS.CREATED_AT, TASKS.ID)
                     .gt(DSL.row(

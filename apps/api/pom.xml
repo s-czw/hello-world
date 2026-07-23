@@ -205,6 +205,17 @@
               </properties>
               <includes>.*</includes>
               <excludes>flyway_schema_history</excludes>
+              <!--
+                jsonb columns (activity_log.diff, notifications.payload) are simulated as H2 JSON during
+                DDL codegen, so jOOQ would generate a plain JSON field. Force them to jOOQ's JSONB type so
+                the runtime binds `cast(? as jsonb)` against the real Postgres jsonb columns.
+              -->
+              <forcedTypes>
+                <forcedType>
+                  <name>JSONB</name>
+                  <includeTypes>JSON</includeTypes>
+                </forcedType>
+              </forcedTypes>
             </database>
             <generate>
               <javaTimeTypes>true</javaTimeTypes>

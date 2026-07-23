@@ -2,33 +2,42 @@ package app.cairn.api.tasks;
 
 import app.cairn.api.auth.AuthPrincipal;
 import app.cairn.api.core.error.ApiException;
+import app.cairn.api.core.error.ConflictException;
 import app.cairn.api.core.error.ForbiddenException;
 import app.cairn.api.core.error.NotFoundException;
 import app.cairn.api.orgs.member.MembershipService;
 import app.cairn.api.projects.ProjectDeletingEvent;
 import app.cairn.api.projects.ProjectService;
 import app.cairn.api.projects.SectionService;
+import app.cairn.api.tasks.event.TaskEvents;
 import app.cairn.api.tasks.ordering.Ordering;
 import app.cairn.api.tasks.web.UpdateTaskRequest;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Tasks domain service: CRUD, completion, and fractional-order moves.
+ * Tasks domain service: CRUD, completion, fractional-order moves, subtasks (one level), and promote.
  *
  * <p>The server always computes the {@code sort_key}: create appends to the end of its section; move
  * derives a key strictly between the target neighbours via {@link Ordering}. Reads order by
  * {@code (sort_key, created_at, id)}, so even if two concurrent moves land equal keys the list is still
  * a stable total order with no lost or duplicated rows. When a key grows past
  * {@link Ordering#MAX_KEY_LENGTH} the section is rebalanced to short keys.
+ *
+ * <p>State transitions publish {@link TaskEvents} within the transaction. The {@code activity} module
+ * records them; the {@code notifications} module (next phase) fans out. Deleting a task publishes
+ * {@link TaskEvents.TaskDeleting} first so comments/attachments/activity are cleaned before the FK-owning
+ * row is removed.
  */
 @Service
 public class TaskService {
@@ -39,16 +48,19 @@ public class TaskService {
     private final ProjectService projects;
     private final SectionService sections;
     private final MembershipService memberships;
+    private final ApplicationEventPublisher events;
 
     public TaskService(
             TaskRepository tasks,
             ProjectService projects,
             SectionService sections,
-            MembershipService memberships) {
+            MembershipService memberships,
+            ApplicationEventPublisher events) {
         this.tasks = tasks;
         this.projects = projects;
         this.sections = sections;
         this.memberships = memberships;
+        this.events = events;
     }
 
     public List<TaskWithSectionKey> listByProject(UUID projectId, TaskCursor after, int limit) {
@@ -62,6 +74,16 @@ public class TaskService {
 
     public List<Task> myOpenTasks(UUID userId) {
         return tasks.myOpenTasks(userId);
+    }
+
+    /** Subtasks of a task, in order. */
+    public List<Task> subtasks(UUID parentId) {
+        return tasks.subtasksByParent(parentId);
+    }
+
+    /** {total, completed} subtask counts for a task. */
+    public int[] subtaskProgress(UUID parentId) {
+        return tasks.subtaskProgress(parentId);
     }
 
     @Transactional
@@ -87,12 +109,48 @@ public class TaskService {
         UUID id = tasks.insert(
                 projectId, sectionId, assigneeId, title.trim(), trimToNull(description), prio, dueDate,
                 caller.userId(), sortKey);
-        return get(id);
+        Task created = get(id);
+        events.publishEvent(new TaskEvents.TaskCreated(
+                id, created.projectId(), caller.userId(), created.assigneeId(), created.title(), false));
+        return created;
+    }
+
+    /** Add a subtask under a parent. One level only: a subtask cannot itself have subtasks (409). */
+    @Transactional
+    public Task createSubtask(AuthPrincipal caller, UUID parentId, String title) {
+        Task parent = get(parentId);
+        if (parent.isSubtask()) {
+            throw new ConflictException("Cannot add a subtask to a subtask (subtasks are one level deep)");
+        }
+        String key = Ordering.after(tasks.maxSubtaskSortKey(parentId).orElse(null));
+        UUID id = tasks.insertSubtask(parent.projectId(), parentId, null, title.trim(), caller.userId(), key);
+        Task created = get(id);
+        events.publishEvent(new TaskEvents.TaskCreated(
+                id, created.projectId(), caller.userId(), created.assigneeId(), created.title(), true));
+        return created;
+    }
+
+    /** Promote a subtask to a full task: clear its parent and append it to the given section (or none). */
+    @Transactional
+    public Task promote(AuthPrincipal caller, UUID id, UUID sectionId) {
+        Task task = get(id);
+        if (!task.isSubtask()) {
+            throw new ConflictException("Task is not a subtask");
+        }
+        if (sectionId != null) {
+            sections.requireSectionInProject(sectionId, task.projectId());
+        }
+        String sortKey = Ordering.after(tasks.maxSortKey(task.projectId(), sectionId, id).orElse(null));
+        tasks.promote(id, sectionId, sortKey);
+        Task promoted = get(id);
+        events.publishEvent(new TaskEvents.TaskSectionChanged(
+                id, promoted.projectId(), caller.userId(), null, sectionId, promoted.title()));
+        return promoted;
     }
 
     @Transactional
-    public Task update(UUID id, UpdateTaskRequest req) {
-        Task task = get(id);
+    public Task update(AuthPrincipal caller, UUID id, UpdateTaskRequest req) {
+        Task before = get(id);
         if (req.titlePresent() && (req.getTitle() == null || req.getTitle().isBlank())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Task title cannot be blank");
         }
@@ -112,7 +170,7 @@ public class TaskService {
             completedVal = nowCompleted;
             completedAtSet = true;
             completedAtVal = nowCompleted
-                    ? (task.completedAt() != null ? task.completedAt() : OffsetDateTime.now())
+                    ? (before.completedAt() != null ? before.completedAt() : OffsetDateTime.now())
                     : null;
         }
 
@@ -125,7 +183,28 @@ public class TaskService {
                 completedSet, completedVal,
                 completedAtSet, completedAtVal);
         tasks.update(id, u);
-        return get(id);
+        Task after = get(id);
+
+        publishFieldEvents(caller, before, after);
+        return after;
+    }
+
+    /** Emit the field-change domain events (assignee / due / completion) after an update. */
+    private void publishFieldEvents(AuthPrincipal caller, Task before, Task after) {
+        UUID actor = caller.userId();
+        if (!Objects.equals(before.assigneeId(), after.assigneeId())) {
+            events.publishEvent(new TaskEvents.TaskAssigneeChanged(
+                    after.id(), after.projectId(), actor, before.assigneeId(), after.assigneeId(), after.title()));
+        }
+        if (!Objects.equals(before.dueDate(), after.dueDate())) {
+            events.publishEvent(new TaskEvents.TaskDueChanged(
+                    after.id(), after.projectId(), actor, after.assigneeId(),
+                    before.dueDate(), after.dueDate(), after.title()));
+        }
+        if (before.completed() != after.completed()) {
+            events.publishEvent(new TaskEvents.TaskCompletionChanged(
+                    after.id(), after.projectId(), actor, after.assigneeId(), after.title(), after.completed()));
+        }
     }
 
     @Transactional
@@ -139,7 +218,7 @@ public class TaskService {
             throw new ForbiddenException(
                     "Only an admin, the task creator/assignee, or the project owner may delete this task");
         }
-        tasks.delete(id);
+        cascadeDelete(id);
     }
 
     /**
@@ -147,7 +226,7 @@ public class TaskService {
      * server computes the fractional key; anchors not present in the target section are ignored.
      */
     @Transactional
-    public Task move(UUID taskId, UUID targetSectionId, UUID beforeTaskId, UUID afterTaskId) {
+    public Task move(AuthPrincipal caller, UUID taskId, UUID targetSectionId, UUID beforeTaskId, UUID afterTaskId) {
         Task task = get(taskId);
         UUID projectId = task.projectId();
         if (targetSectionId != null) {
@@ -185,6 +264,10 @@ public class TaskService {
             rebalanceAndPlace(taskId, projectId, targetSectionId, newKey);
         } else {
             tasks.moveTo(taskId, targetSectionId, newKey);
+        }
+        if (!Objects.equals(task.sectionId(), targetSectionId)) {
+            events.publishEvent(new TaskEvents.TaskSectionChanged(
+                    taskId, projectId, caller.userId(), task.sectionId(), targetSectionId, task.title()));
         }
         return get(taskId);
     }
@@ -230,7 +313,23 @@ public class TaskService {
     /** Delete a project's tasks when the project is being deleted (synchronous, same transaction). */
     @EventListener
     public void onProjectDeleting(ProjectDeletingEvent event) {
-        tasks.deleteByProject(event.projectId());
+        for (UUID id : tasks.topLevelIdsInProject(event.projectId())) {
+            cascadeDelete(id);
+        }
+    }
+
+    /**
+     * Delete a task, its subtasks, and everything hanging off them. Each task publishes a
+     * {@link TaskEvents.TaskDeleting} before its row is removed so comments/attachments/activity are
+     * cleaned first (children before the parent, honouring the self-referential FK).
+     */
+    private void cascadeDelete(UUID taskId) {
+        for (UUID childId : tasks.subtaskIds(taskId)) {
+            events.publishEvent(new TaskEvents.TaskDeleting(childId));
+            tasks.delete(childId);
+        }
+        events.publishEvent(new TaskEvents.TaskDeleting(taskId));
+        tasks.delete(taskId);
     }
 
     // --- helpers -------------------------------------------------------------

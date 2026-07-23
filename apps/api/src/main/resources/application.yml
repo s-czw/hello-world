@@ -22,6 +22,12 @@ spring:
       port: ${SPRING_DATA_REDIS_PORT:6379}
       timeout: 500ms
       connect-timeout: 500ms
+  servlet:
+    multipart:
+      # Attachment cap is enforced in AttachmentService (cairn.attachments.max-size-bytes, 25 MB); these
+      # container limits sit just above it so oversize uploads fail with a clean RFC-9457 413 either way.
+      max-file-size: 30MB
+      max-request-size: 30MB
 
 cairn:
   auth:
@@ -41,6 +47,11 @@ cairn:
   invite:
     ttl-days: 14
     accept-url-base: ${APP_PUBLIC_URL:http://localhost:3000}/accept-invite
+  notifications:
+    # In-app notification retention (F1). The purge runs in-process via @Scheduled; cutoff = now - retention.
+    retention-days: ${CAIRN_NOTIF_RETENTION_DAYS:90}
+    purge-cron: ${CAIRN_NOTIF_PURGE_CRON:0 30 3 * * *}   # daily at 03:30 (server time)
+    purge-enabled: ${CAIRN_NOTIF_PURGE_ENABLED:true}
 
 springdoc:
   api-docs:

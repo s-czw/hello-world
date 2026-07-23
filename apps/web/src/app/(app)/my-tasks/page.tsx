@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { CompleteToggle } from "@/components/task/CompleteToggle";
 import { PriorityFlag } from "@/components/task/PriorityFlag";
+import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { useMyTasks, type MyTask } from "@/lib/tasks";
+import { useCreateSampleProject } from "@/lib/sample";
 import { DUE_BUCKET_ORDER, dueBucket, formatDue } from "@/lib/dates";
 import styles from "../page.module.css";
 
@@ -19,6 +21,17 @@ export default function MyTasksPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const { data, isLoading } = useMyTasks();
+  const createSample = useCreateSampleProject();
+
+  async function addSample() {
+    try {
+      const project = await createSample.mutateAsync();
+      toast.success("Sample project created");
+      if (project.id) router.push(`/projects/${project.id}/list`);
+    } catch (e) {
+      toast.error(problemMessage(e, "Couldn't create the sample project."));
+    }
+  }
 
   const projects = useQuery({
     queryKey: ["projects"],
@@ -80,6 +93,8 @@ export default function MyTasksPage() {
         </div>
       </div>
 
+      <OnboardingChecklist />
+
       {isLoading ? (
         <div className={styles.panel} style={{ padding: 16 }}>
           <Skeleton height={20} />
@@ -93,11 +108,20 @@ export default function MyTasksPage() {
           <EmptyState
             icon="✳"
             headline="Create your first project"
-            body="Projects hold your sections and tasks. Start one to get going."
+            body="Projects hold your sections and tasks. Start one — or drop in a sample to explore first."
             action={
-              <Button onClick={() => router.push("/projects/new")}>
-                New project
-              </Button>
+              <div className={styles.emptyActions}>
+                <Button onClick={() => router.push("/projects/new")}>
+                  New project
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={addSample}
+                  loading={createSample.isPending}
+                >
+                  Add a sample project
+                </Button>
+              </div>
             }
           />
         </div>

@@ -20,6 +20,8 @@ import { Drawer } from "@/components/ui/Drawer";
 import { anyPopoverOpen } from "@/components/ui/Popover";
 import { TaskPeek } from "@/components/task/TaskPeek";
 import { ProjectHeader } from "@/components/project/ProjectHeader";
+import { JitHint } from "@/components/onboarding/JitHint";
+import { ONBOARDING_KEYS } from "@/lib/onboarding";
 import { SectionGroup } from "./SectionGroup";
 import {
   useProject,
@@ -369,6 +371,10 @@ export function ListView({ projectId }: { projectId: string }) {
     <div className={styles.wrap}>
       <ProjectHeader projectId={projectId} active="list" />
 
+      <JitHint storageKey={ONBOARDING_KEYS.hintList}>
+        Click any cell to edit it inline.
+      </JitHint>
+
       {loading ? (
         <div className={styles.scroll}>
           <div className={styles.loading}>
@@ -450,6 +456,7 @@ export function ListView({ projectId }: { projectId: string }) {
             sections={sections}
             projectId={projectId}
             onClose={closePeek}
+            onOpenTask={(id) => router.replace(`${pathname}?task=${id}`)}
           />
         )}
       </Drawer>

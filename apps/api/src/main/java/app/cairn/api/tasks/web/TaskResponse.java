@@ -19,6 +19,7 @@ public record TaskResponse(
         OffsetDateTime completedAt,
         UUID createdBy,
         String sortKey,
+        UUID parentTaskId,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt) {
 
@@ -26,6 +27,6 @@ public record TaskResponse(
         return new TaskResponse(
                 t.id(), t.projectId(), t.sectionId(), t.assigneeId(), t.title(), t.description(),
                 t.priority(), t.dueDate(), t.completed(), t.completedAt(), t.createdBy(), t.sortKey(),
-                t.createdAt(), t.updatedAt());
+                t.parentTaskId(), t.createdAt(), t.updatedAt());
     }
 }

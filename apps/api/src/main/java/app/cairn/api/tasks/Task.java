@@ -18,5 +18,13 @@ public record Task(
         OffsetDateTime completedAt,
         UUID createdBy,
         String sortKey,
+        UUID parentTaskId,
+        String subtaskSortKey,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt) {}
+        OffsetDateTime updatedAt) {
+
+    /** True when this task is a subtask (has a parent). One level only (D-009-adjacent, C2). */
+    public boolean isSubtask() {
+        return parentTaskId != null;
+    }
+}

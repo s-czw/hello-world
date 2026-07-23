@@ -168,6 +168,15 @@ public class PortfolioService {
         return new PortfolioRollup(portfolio, rows, RollupSummary.of(rows, now), now);
     }
 
+    /**
+     * Owner ids of every portfolio that contains the given project (for the F1 status-update fan-out).
+     * A read used by the notifications module through this public service interface (no cross-module
+     * repository reach-in).
+     */
+    public List<UUID> ownerIdsOfPortfoliosContaining(UUID projectId) {
+        return portfolios.ownerIdsContainingProject(projectId);
+    }
+
     // --- project-delete cascade ----------------------------------------------
 
     /** When a project is deleted, drop its portfolio memberships (sync, same tx) so the FK is clear. */

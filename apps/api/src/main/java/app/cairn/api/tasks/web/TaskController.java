@@ -74,15 +74,18 @@ public class TaskController {
     }
 
     @GetMapping("/tasks/{id}")
-    public ApiResponse<TaskResponse> get(@PathVariable UUID id) {
+    public ApiResponse<TaskDetailResponse> get(@PathVariable UUID id) {
         currentUser.require();
-        return ApiResponse.of(TaskResponse.from(tasks.get(id)));
+        Task task = tasks.get(id);
+        List<Task> subtasks = tasks.subtasks(id);
+        int[] progress = tasks.subtaskProgress(id);
+        return ApiResponse.of(TaskDetailResponse.of(task, subtasks, progress[0], progress[1]));
     }
 
     @PatchMapping("/tasks/{id}")
     public ApiResponse<TaskResponse> update(@PathVariable UUID id, @RequestBody UpdateTaskRequest req) {
-        currentUser.require();
-        return ApiResponse.of(TaskResponse.from(tasks.update(id, req)));
+        AuthPrincipal caller = currentUser.require();
+        return ApiResponse.of(TaskResponse.from(tasks.update(caller, id, req)));
     }
 
     @DeleteMapping("/tasks/{id}")
@@ -94,8 +97,26 @@ public class TaskController {
 
     @PostMapping("/tasks/{id}/move")
     public ApiResponse<TaskResponse> move(@PathVariable UUID id, @RequestBody MoveTaskRequest req) {
-        currentUser.require();
-        Task moved = tasks.move(id, req.sectionId(), req.beforeTaskId(), req.afterTaskId());
+        AuthPrincipal caller = currentUser.require();
+        Task moved = tasks.move(caller, id, req.sectionId(), req.beforeTaskId(), req.afterTaskId());
         return ApiResponse.of(TaskResponse.from(moved));
+    }
+
+    // --- subtasks (C2) --------------------------------------------------------
+
+    @PostMapping("/tasks/{id}/subtasks")
+    public ResponseEntity<ApiResponse<TaskResponse>> addSubtask(
+            @PathVariable UUID id, @Valid @RequestBody CreateSubtaskRequest req) {
+        AuthPrincipal caller = currentUser.require();
+        Task subtask = tasks.createSubtask(caller, id, req.title());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(TaskResponse.from(subtask)));
+    }
+
+    @PostMapping("/tasks/{id}/promote")
+    public ApiResponse<TaskResponse> promote(
+            @PathVariable UUID id, @RequestBody(required = false) PromoteTaskRequest req) {
+        AuthPrincipal caller = currentUser.require();
+        UUID sectionId = req == null ? null : req.sectionId();
+        return ApiResponse.of(TaskResponse.from(tasks.promote(caller, id, sectionId)));
     }
 }

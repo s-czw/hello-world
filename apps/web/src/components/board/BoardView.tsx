@@ -297,6 +297,7 @@ export function BoardView({ projectId }: { projectId: string }) {
             sections={sections}
             projectId={projectId}
             onClose={closePeek}
+            onOpenTask={(id) => router.replace(`${pathname}?task=${id}`)}
           />
         )}
       </Drawer>

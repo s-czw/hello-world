@@ -1,6 +1,7 @@
 package app.cairn.api.portfolios;
 
 import static app.cairn.api.jooq.Tables.PORTFOLIOS;
+import static app.cairn.api.jooq.Tables.PORTFOLIO_PROJECTS;
 
 import app.cairn.api.core.db.OrgScopedDsl;
 import app.cairn.api.core.id.Uuid7;
@@ -105,5 +106,22 @@ public class PortfolioRepository {
                 .where(db.orgFilter(PORTFOLIOS))
                 .and(PORTFOLIOS.ID.eq(id))
                 .execute();
+    }
+
+    /**
+     * Distinct owner ids of every (org-scoped) portfolio that contains the given project. Used by the
+     * notifications fan-out (F1, type 4). Never returns a null owner.
+     */
+    public List<UUID> ownerIdsContainingProject(UUID projectId) {
+        return db.dsl()
+                .selectDistinct(PORTFOLIOS.OWNER_ID)
+                .from(PORTFOLIOS)
+                .join(PORTFOLIO_PROJECTS)
+                .on(PORTFOLIO_PROJECTS.PORTFOLIO_ID.eq(PORTFOLIOS.ID))
+                .where(db.orgFilter(PORTFOLIOS))
+                .and(PORTFOLIO_PROJECTS.ORGANIZATION_ID.eq(db.orgId()))
+                .and(PORTFOLIO_PROJECTS.PROJECT_ID.eq(projectId))
+                .and(PORTFOLIOS.OWNER_ID.isNotNull())
+                .fetch(PORTFOLIOS.OWNER_ID);
     }
 }

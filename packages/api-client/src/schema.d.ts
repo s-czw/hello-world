@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/v1/attachments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["download"];
+        put?: never;
+        post?: never;
+        delete: operations["delete_6"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/bootstrap": {
         parameters: {
             query?: never;
@@ -100,6 +116,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/comments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_5"];
+        options?: never;
+        head?: never;
+        patch: operations["update_5"];
+        trace?: never;
+    };
     "/api/v1/invites": {
         parameters: {
             query?: never;
@@ -107,9 +139,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_4"];
+        get: operations["list_6"];
         put?: never;
-        post: operations["create_6"];
+        post: operations["create_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -164,6 +196,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_8"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["readAll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["unreadCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolios": {
         parameters: {
             query?: never;
@@ -171,9 +267,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_3"];
+        get: operations["list_5"];
         put?: never;
-        post: operations["create_5"];
+        post: operations["create_6"];
         delete?: never;
         options?: never;
         head?: never;
@@ -267,9 +363,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_1"];
+        get: operations["list_3"];
         put?: never;
-        post: operations["create_1"];
+        post: operations["create_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -299,9 +395,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_2"];
+        get: operations["list_4"];
         put?: never;
-        post: operations["create_4"];
+        post: operations["create_5"];
         delete?: never;
         options?: never;
         head?: never;
@@ -317,7 +413,7 @@ export interface paths {
         };
         get: operations["history"];
         put?: never;
-        post: operations["create_3"];
+        post: operations["create_4"];
         delete?: never;
         options?: never;
         head?: never;
@@ -333,7 +429,7 @@ export interface paths {
         };
         get: operations["listByProject"];
         put?: never;
-        post: operations["create_2"];
+        post: operations["create_3"];
         delete?: never;
         options?: never;
         head?: never;
@@ -404,6 +500,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tasks/{id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["promote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{id}/subtasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addSubtask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["activity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_2"];
+        put?: never;
+        post: operations["upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_1"];
+        put?: never;
+        post: operations["create_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/teams": {
         parameters: {
             query?: never;
@@ -459,7 +635,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_5"];
+        get: operations["list_7"];
         put?: never;
         post?: never;
         delete?: never;
@@ -530,6 +706,20 @@ export interface components {
             /** Format: uuid */
             userId?: string;
         };
+        ActivityStreamEntry: {
+            action?: string;
+            /** Format: uuid */
+            actorId?: string;
+            body?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            diff?: components["schemas"]["JsonNode"];
+            edited?: boolean;
+            /** Format: date-time */
+            editedAt?: string;
+            id?: string;
+            kind?: string;
+        };
         AddProjectRequest: {
             /** Format: uuid */
             projectId: string;
@@ -540,14 +730,44 @@ export interface components {
                 [key: string]: Record<string, never>;
             };
         };
+        ApiResponseAttachmentResponse: {
+            data?: components["schemas"]["AttachmentResponse"];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
         ApiResponseBootstrapStatusResponse: {
             data?: components["schemas"]["BootstrapStatusResponse"];
             meta?: {
                 [key: string]: Record<string, never>;
             };
         };
+        ApiResponseCommentResponse: {
+            data?: components["schemas"]["CommentResponse"];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
         ApiResponseCreatedInviteResponse: {
             data?: components["schemas"]["CreatedInviteResponse"];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        ApiResponseListActivityStreamEntry: {
+            data?: components["schemas"]["ActivityStreamEntry"][];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        ApiResponseListAttachmentResponse: {
+            data?: components["schemas"]["AttachmentResponse"][];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        ApiResponseListCommentResponse: {
+            data?: components["schemas"]["CommentResponse"][];
             meta?: {
                 [key: string]: Record<string, never>;
             };
@@ -560,6 +780,12 @@ export interface components {
         };
         ApiResponseListMyTaskResponse: {
             data?: components["schemas"]["MyTaskResponse"][];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        ApiResponseListNotificationResponse: {
+            data?: components["schemas"]["NotificationResponse"][];
             meta?: {
                 [key: string]: Record<string, never>;
             };
@@ -642,6 +868,12 @@ export interface components {
                 [key: string]: Record<string, never>;
             };
         };
+        ApiResponseTaskDetailResponse: {
+            data?: components["schemas"]["TaskDetailResponse"];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
         ApiResponseTaskResponse: {
             data?: components["schemas"]["TaskResponse"];
             meta?: {
@@ -654,11 +886,34 @@ export interface components {
                 [key: string]: Record<string, never>;
             };
         };
+        ApiResponseUnreadCountResponse: {
+            data?: components["schemas"]["UnreadCountResponse"];
+            meta?: {
+                [key: string]: Record<string, never>;
+            };
+        };
         ApiResponseUserResponse: {
             data?: components["schemas"]["UserResponse"];
             meta?: {
                 [key: string]: Record<string, never>;
             };
+        };
+        AttachmentResponse: {
+            /** Format: uuid */
+            commentId?: string;
+            contentType?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            downloadUrl?: string;
+            fileName?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            /** Format: uuid */
+            taskId?: string;
+            /** Format: uuid */
+            uploadedBy?: string;
         };
         BootstrapRequest: {
             adminName: string;
@@ -668,6 +923,23 @@ export interface components {
         };
         BootstrapStatusResponse: {
             needsBootstrap?: boolean;
+        };
+        CommentResponse: {
+            /** Format: uuid */
+            authorId?: string;
+            body?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            edited?: boolean;
+            /** Format: date-time */
+            editedAt?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            taskId?: string;
+        };
+        CreateCommentRequest: {
+            body: string;
         };
         CreateInviteRequest: {
             email: string;
@@ -696,6 +968,9 @@ export interface components {
             body?: string;
             status: string;
             title?: string;
+        };
+        CreateSubtaskRequest: {
+            title: string;
         };
         CreateTaskRequest: {
             /** Format: uuid */
@@ -728,6 +1003,7 @@ export interface components {
             /** Format: uuid */
             id?: string;
         };
+        JsonNode: Record<string, never>;
         LoginRequest: {
             email: string;
             password: string;
@@ -781,6 +1057,20 @@ export interface components {
             sectionId?: string;
             title?: string;
         };
+        NotificationResponse: {
+            /** Format: uuid */
+            actorId?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: uuid */
+            id?: string;
+            payload?: components["schemas"]["JsonNode"];
+            read?: boolean;
+            /** Format: uuid */
+            resourceId?: string;
+            resourceType?: string;
+            type?: string;
+        };
         PortfolioResponse: {
             color?: string;
             /** Format: date-time */
@@ -791,6 +1081,12 @@ export interface components {
             name?: string;
             /** Format: uuid */
             ownerId?: string;
+        };
+        Progress: {
+            /** Format: int32 */
+            completed?: number;
+            /** Format: int32 */
+            total?: number;
         };
         ProjectResponse: {
             archived?: boolean;
@@ -813,6 +1109,10 @@ export interface components {
             statusUpdatedAt?: string;
             /** Format: uuid */
             teamId?: string;
+        };
+        PromoteTaskRequest: {
+            /** Format: uuid */
+            sectionId?: string;
         };
         RollupProjectResponse: {
             color?: string;
@@ -880,6 +1180,11 @@ export interface components {
             status?: string;
             title?: string;
         };
+        TaskDetailResponse: {
+            subtaskProgress?: components["schemas"]["Progress"];
+            subtasks?: components["schemas"]["TaskResponse"][];
+            task?: components["schemas"]["TaskResponse"];
+        };
         TaskResponse: {
             /** Format: uuid */
             assigneeId?: string;
@@ -895,6 +1200,8 @@ export interface components {
             dueDate?: string;
             /** Format: uuid */
             id?: string;
+            /** Format: uuid */
+            parentTaskId?: string;
             priority?: string;
             /** Format: uuid */
             projectId?: string;
@@ -913,6 +1220,13 @@ export interface components {
             id?: string;
             memberIds?: string[];
             name?: string;
+        };
+        UnreadCountResponse: {
+            /** Format: int32 */
+            count?: number;
+        };
+        UpdateCommentRequest: {
+            body: string;
         };
         UpdatePortfolioRequest: {
             color?: string;
@@ -976,6 +1290,48 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    delete_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bootstrap: {
         parameters: {
             query?: never;
@@ -1102,7 +1458,53 @@ export interface operations {
             };
         };
     };
-    list_4: {
+    delete_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCommentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCommentResponse"];
+                };
+            };
+        };
+    };
+    list_6: {
         parameters: {
             query?: {
                 cursor?: string;
@@ -1125,7 +1527,7 @@ export interface operations {
             };
         };
     };
-    create_6: {
+    create_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -1213,7 +1615,88 @@ export interface operations {
             };
         };
     };
-    list_3: {
+    list_8: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListNotificationResponse"];
+                };
+            };
+        };
+    };
+    readAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unreadCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseUnreadCountResponse"];
+                };
+            };
+        };
+    };
+    read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_5: {
         parameters: {
             query?: {
                 cursor?: string;
@@ -1236,7 +1719,7 @@ export interface operations {
             };
         };
     };
-    create_5: {
+    create_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -1420,7 +1903,7 @@ export interface operations {
             };
         };
     };
-    list_1: {
+    list_3: {
         parameters: {
             query?: {
                 cursor?: string;
@@ -1444,7 +1927,7 @@ export interface operations {
             };
         };
     };
-    create_1: {
+    create_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -1536,7 +2019,7 @@ export interface operations {
             };
         };
     };
-    list_2: {
+    list_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -1558,7 +2041,7 @@ export interface operations {
             };
         };
     };
-    create_4: {
+    create_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -1609,7 +2092,7 @@ export interface operations {
             };
         };
     };
-    create_3: {
+    create_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -1660,7 +2143,7 @@ export interface operations {
             };
         };
     };
-    create_2: {
+    create_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1777,7 +2260,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseTaskResponse"];
+                    "*/*": components["schemas"]["ApiResponseTaskDetailResponse"];
                 };
             };
         };
@@ -1850,6 +2333,184 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseTaskResponse"];
+                };
+            };
+        };
+    };
+    promote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PromoteTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTaskResponse"];
+                };
+            };
+        };
+    };
+    addSubtask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSubtaskRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTaskResponse"];
+                };
+            };
+        };
+    };
+    activity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListActivityStreamEntry"];
+                };
+            };
+        };
+    };
+    list_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListAttachmentResponse"];
+                };
+            };
+        };
+    };
+    upload: {
+        parameters: {
+            query?: {
+                commentId?: string;
+            };
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAttachmentResponse"];
+                };
+            };
+        };
+    };
+    list_1: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListCommentResponse"];
+                };
+            };
+        };
+    };
+    create_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCommentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCommentResponse"];
                 };
             };
         };
@@ -1973,7 +2634,7 @@ export interface operations {
             };
         };
     };
-    list_5: {
+    list_7: {
         parameters: {
             query?: {
                 cursor?: string;

@@ -196,6 +196,9 @@ jobs:
         env:
           DB_URL: jdbc:postgresql://127.0.0.1:5432/cairn
           DATABASE_URL: postgres://cairn:cairn@127.0.0.1:5432/cairn
+          # M3: the smoke uploads an attachment; give the API a writable storage
+          # root under the workspace (the dev default path is not writable in CI).
+          CAIRN_STORAGE_DIR: ${{ github.workspace }}/.data/attachments
         run: node scripts/run-e2e.mjs
       - name: Upload Playwright report on failure
         if: failure()

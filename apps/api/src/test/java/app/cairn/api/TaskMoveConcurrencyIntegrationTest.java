@@ -2,8 +2,10 @@ package app.cairn.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import app.cairn.api.auth.AuthPrincipal;
 import app.cairn.api.core.id.Uuid7;
 import app.cairn.api.core.org.OrgContext;
+import app.cairn.api.orgs.member.Role;
 import app.cairn.api.support.IntegrationTestBase;
 import app.cairn.api.tasks.Task;
 import app.cairn.api.tasks.TaskService;
@@ -46,6 +48,7 @@ class TaskMoveConcurrencyIntegrationTest extends IntegrationTestBase {
         UUID projectId = Uuid7.generate();
         UUID sectionId = Uuid7.generate();
         seed(orgId, userId, teamId, projectId, sectionId);
+        final AuthPrincipal principal = new AuthPrincipal(userId, orgId, Role.ADMIN, "race@acme.test");
 
         List<UUID> taskIds = new ArrayList<>();
         List<String> keys = Ordering.rebalance(TASK_COUNT);
@@ -76,9 +79,9 @@ class TaskMoveConcurrencyIntegrationTest extends IntegrationTestBase {
                             }
                             try {
                                 if (rnd.nextBoolean()) {
-                                    taskService.move(moved, sectionId, anchor, null); // before anchor
+                                    taskService.move(principal, moved, sectionId, anchor, null); // before anchor
                                 } else {
-                                    taskService.move(moved, sectionId, null, anchor); // after anchor
+                                    taskService.move(principal, moved, sectionId, null, anchor); // after anchor
                                 }
                             } catch (RuntimeException e) {
                                 errors.add(e);

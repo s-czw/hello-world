@@ -48,6 +48,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return pd;
     }
 
+    /** An upload larger than the configured multipart limit maps to 413 (RFC 9457 problem+json). */
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.PAYLOAD_TOO_LARGE, "The uploaded file exceeds the maximum allowed size");
+        pd.setType(ABOUT_BLANK);
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(pd);
+    }
+
     @ExceptionHandler(ConstraintViolationException.class)
     public ProblemDetail handleConstraintViolation(ConstraintViolationException ex) {
         List<Map<String, String>> errors = new ArrayList<>();

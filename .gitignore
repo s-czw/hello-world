@@ -17,6 +17,9 @@ target/
 openapi-tmp/
 *.openapi.tmp.json
 
+# Local attachment storage (dev default CAIRN_STORAGE_DIR)
+.data/
+
 # Env & secrets
 .env
 .env.*
