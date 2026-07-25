@@ -13,7 +13,7 @@ concurrency:
 env:
   NODE_VERSION: "22"
   JAVA_VERSION: "21"
-  PNPM_VERSION: "10"
+  # pnpm version intentionally NOT set here: it comes from `packageManager` in the root package.json.
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -63,9 +63,9 @@ jobs:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
+      # No `version:` input on purpose — the root package.json `packageManager` field is the single
+      # source of truth. Setting both makes pnpm/action-setup@v4 fail with "multiple versions".
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -97,9 +97,9 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
+      # No `version:` input on purpose — the root package.json `packageManager` field is the single
+      # source of truth. Setting both makes pnpm/action-setup@v4 fail with "multiple versions".
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -132,9 +132,9 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
+      # No `version:` input on purpose — the root package.json `packageManager` field is the single
+      # source of truth. Setting both makes pnpm/action-setup@v4 fail with "multiple versions".
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -174,9 +174,9 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
+      # No `version:` input on purpose — the root package.json `packageManager` field is the single
+      # source of truth. Setting both makes pnpm/action-setup@v4 fail with "multiple versions".
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
