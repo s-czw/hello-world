@@ -250,6 +250,43 @@ class ProjectsTasksIntegrationTest extends IntegrationTestBase {
         return UUID.fromString(body(r).get("data").get("id").asText());
     }
 
+    // --- schedule dates on create (spec B2; regression: they were silently dropped) ----------
+
+    @Test
+    void createAcceptsScheduleDatesAndRejectsBackwardsWindow() throws Exception {
+        Cookie[] admin = bootstrap();
+        UUID teamId = generalTeamId();
+
+        // dates supplied at create time must persist — POST used to ignore them, leaving every new
+        // project unscheduled and the portfolio schedule view empty until someone PATCHed it.
+        MvcResult created = mockMvc.perform(postJson("/api/v1/projects", admin,
+                        "{\"name\":\"Scheduled\",\"teamId\":\"" + teamId
+                                + "\",\"startDate\":\"2026-07-01\",\"endDate\":\"2026-09-30\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.startDate").value("2026-07-01"))
+                .andExpect(jsonPath("$.data.endDate").value("2026-09-30"))
+                .andReturn();
+        UUID id = UUID.fromString(body(created).get("data").get("id").asText());
+
+        // and survive a re-read (i.e. actually hit the row, not just the response mapper)
+        mockMvc.perform(get("/api/v1/projects/" + id).cookie(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.startDate").value("2026-07-01"))
+                .andExpect(jsonPath("$.data.endDate").value("2026-09-30"));
+
+        // both optional — omitting them is still fine
+        mockMvc.perform(postJson("/api/v1/projects", admin,
+                        "{\"name\":\"Undated\",\"teamId\":\"" + teamId + "\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.startDate").doesNotExist());
+
+        // end before start is rejected on create, exactly as PATCH already rejected it
+        mockMvc.perform(postJson("/api/v1/projects", admin,
+                        "{\"name\":\"Backwards\",\"teamId\":\"" + teamId
+                                + "\",\"startDate\":\"2026-09-30\",\"endDate\":\"2026-07-01\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
     private UUID createProject(Cookie[] admin, String name, UUID teamId) throws Exception {
         MvcResult r = mockMvc.perform(postJson("/api/v1/projects", admin,
                         "{\"name\":\"" + name + "\",\"teamId\":\"" + teamId + "\"}"))

@@ -5,6 +5,7 @@ import static app.cairn.api.jooq.Tables.PROJECTS;
 import app.cairn.api.core.db.OrgScopedDsl;
 import app.cairn.api.core.id.Uuid7;
 import app.cairn.api.jooq.tables.records.ProjectsRecord;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,7 +43,14 @@ public class ProjectRepository {
             r.get(PROJECTS.CREATED_AT));
 
     public UUID insert(
-            UUID teamId, UUID ownerId, String name, String description, String color, String defaultView) {
+            UUID teamId,
+            UUID ownerId,
+            String name,
+            String description,
+            String color,
+            String defaultView,
+            LocalDate startDate,
+            LocalDate endDate) {
         ProjectsRecord rec = db.newRecord(PROJECTS);
         UUID id = Uuid7.generate();
         rec.setId(id);
@@ -53,6 +61,8 @@ public class ProjectRepository {
         rec.setColor(color);
         rec.setDefaultView(defaultView);
         rec.setArchived(false);
+        rec.setStartDate(startDate);
+        rec.setEndDate(endDate);
         rec.insert();
         return id;
     }

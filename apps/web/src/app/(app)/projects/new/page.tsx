@@ -44,6 +44,10 @@ export default function NewProjectPage() {
   const [teamId, setTeamId] = useState("");
   const [color, setColor] = useState(COLORS[0]);
   const [description, setDescription] = useState("");
+  // Optional schedule window (spec B2). Drives the portfolio schedule view — a project created
+  // without dates lands in the "not scheduled" tray until they are filled in.
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +68,10 @@ export default function NewProjectPage() {
       setError("A name and team are required.");
       return;
     }
+    if (startDate && endDate && endDate < startDate) {
+      setError("The end date cannot be before the start date.");
+      return;
+    }
     setSubmitting(true);
     const { data, error: err } = await api.POST("/api/v1/projects", {
       body: {
@@ -72,6 +80,8 @@ export default function NewProjectPage() {
         color,
         description: description.trim() || undefined,
         defaultView: "list",
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
       },
     });
     if (err || !data?.data?.id) {
@@ -136,6 +146,22 @@ export default function NewProjectPage() {
           onChange={(e) => setDescription(e.target.value)}
           modal
         />
+        <div className={styles.newProjectDates}>
+          <Input
+            label="Start date (optional)"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            modal
+          />
+          <Input
+            label="End date (optional)"
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            modal
+          />
+        </div>
         <div className={styles.newProjectFooter}>
           <Button variant="secondary" size="dialog" onClick={close} type="button">
             Cancel

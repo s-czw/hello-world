@@ -7,6 +7,7 @@ import app.cairn.api.core.error.NotFoundException;
 import app.cairn.api.orgs.member.MembershipService;
 import app.cairn.api.projects.web.UpdateProjectRequest;
 import app.cairn.api.teams.TeamService;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -81,13 +82,17 @@ public class ProjectService {
             String color,
             UUID teamId,
             UUID ownerId,
-            String defaultView) {
+            String defaultView,
+            LocalDate startDate,
+            LocalDate endDate) {
         teams.requireTeam(teamId);
         UUID owner = ownerId != null ? ownerId : caller.userId();
         requireMember(owner);
         String view = defaultView == null ? "list" : defaultView;
         requireValidView(view);
-        UUID id = projects.insert(teamId, owner, name.trim(), trimToNull(description), trimToNull(color), view);
+        requireOrderedDates(startDate, endDate); // same guard PATCH applies
+        UUID id = projects.insert(
+                teamId, owner, name.trim(), trimToNull(description), trimToNull(color), view, startDate, endDate);
         seedDefaultSections(id);
         return projects.findById(id).orElseThrow();
     }
@@ -115,10 +120,8 @@ public class ProjectService {
         if (req.defaultViewPresent() && req.getDefaultView() != null) {
             requireValidView(req.getDefaultView());
         }
-        if (req.startDatePresent() && req.endDatePresent()
-                && req.getStartDate() != null && req.getEndDate() != null
-                && req.getEndDate().isBefore(req.getStartDate())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "endDate must not be before startDate");
+        if (req.startDatePresent() && req.endDatePresent()) {
+            requireOrderedDates(req.getStartDate(), req.getEndDate());
         }
         ProjectUpdate u = new ProjectUpdate(
                 req.namePresent(), req.getName() == null ? null : req.getName().trim(),
@@ -150,6 +153,13 @@ public class ProjectService {
     private void requireMember(UUID userId) {
         if (memberships.findByUserId(userId).isEmpty()) {
             throw new NotFoundException("User " + userId + " is not a member of this organization");
+        }
+    }
+
+    /** A schedule window must not run backwards; either end may be absent (spec B2: both optional). */
+    private static void requireOrderedDates(LocalDate startDate, LocalDate endDate) {
+        if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "endDate must not be before startDate");
         }
     }
 

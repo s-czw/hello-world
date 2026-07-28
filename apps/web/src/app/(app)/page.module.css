@@ -236,6 +236,12 @@
 .swatch[data-selected="true"] {
   border-color: var(--ink-primary);
 }
+.newProjectDates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
 .newProjectFooter {
   display: flex;
   justify-content: flex-end;

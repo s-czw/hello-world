@@ -955,9 +955,13 @@ export interface components {
             color?: string;
             defaultView?: string;
             description?: string;
+            /** Format: date */
+            endDate?: string;
             name: string;
             /** Format: uuid */
             ownerId?: string;
+            /** Format: date */
+            startDate?: string;
             /** Format: uuid */
             teamId: string;
         };

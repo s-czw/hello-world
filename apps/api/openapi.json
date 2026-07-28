@@ -704,6 +704,10 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "endDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
           "name" : {
             "maxLength" : 200,
             "minLength" : 0,
@@ -711,6 +715,10 @@
           },
           "ownerId" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "startDate" : {
+            "format" : "date",
             "type" : "string"
           },
           "teamId" : {

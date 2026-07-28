@@ -64,7 +64,15 @@ public class ProjectController {
     public ResponseEntity<ApiResponse<ProjectResponse>> create(@Valid @RequestBody CreateProjectRequest req) {
         var caller = currentUser.require();
         Project project = projects.create(
-                caller, req.name(), req.description(), req.color(), req.teamId(), req.ownerId(), req.defaultView());
+                caller,
+                req.name(),
+                req.description(),
+                req.color(),
+                req.teamId(),
+                req.ownerId(),
+                req.defaultView(),
+                req.startDate(),
+                req.endDate());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(ProjectResponse.from(project)));
     }
 
