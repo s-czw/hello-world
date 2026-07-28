@@ -1,0 +1,241 @@
+# Cairn — PRODUCTION / STAGING stack.
+#
+#   cp .env.prod.example .env.prod && $EDITOR .env.prod      # fill in every value
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# See DEPLOY.md for the full runbook (first run, bootstrap, backup/restore, rollback).
+#
+# Topology (D-028 lean MVP — one api replica running its jobs in-process, no PgBouncer, no
+# worker container, no object storage):
+#
+#   internet ──► traefik (80/443, ACME) ─┬─► web  (Next.js standalone)      cairn_edge
+#                                        └─► api  (Spring Boot)             cairn_edge
+#                                                  └─► postgres, valkey     cairn_internal (no egress)
+#                                             backup sidecar ──► postgres   cairn_internal
+#
+# Traefik routes /api/* straight to the api container and everything else to web, so browser
+# requests are same-origin and the session cookies (incl. the non-httpOnly cairn_csrf token)
+# work exactly as they do in development.
+
+name: cairn
+
+services:
+  # ---------------------------------------------------------------------------
+  # Edge — TLS termination, ACME, security headers. Dashboard is OFF.
+  # ---------------------------------------------------------------------------
+  traefik:
+    image: traefik:v3.3
+    container_name: cairn-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Read-only socket: Traefik only needs to discover container labels.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./docker/traefik/dynamic:/etc/traefik/dynamic:ro
+      - acme:/letsencrypt
+    networks:
+      - edge
+    healthcheck:
+      # The `ping` entrypoint (:8082, unpublished) is enabled in docker/traefik/traefik.yml.
+      # Advisory only — nothing depends_on traefik, so a false negative cannot stall a deploy.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8082/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ---------------------------------------------------------------------------
+  # Web — Next.js standalone server.
+  # NOTE: API_ORIGIN is a *build* arg (Next inlines it into the middleware bundle and the
+  # /api rewrite). Changing it requires a rebuild, not just a restart.
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+      args:
+        API_ORIGIN: http://api:8080
+    image: cairn-web:${CAIRN_IMAGE_TAG:-local}
+    container_name: cairn-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - edge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=cairn_edge"
+      # Catch-all router: everything the api router does not claim.
+      - "traefik.http.routers.cairn-web.rule=Host(`${CAIRN_DOMAIN:?set CAIRN_DOMAIN in .env.prod}`)"
+      - "traefik.http.routers.cairn-web.entrypoints=websecure"
+      - "traefik.http.routers.cairn-web.tls=true"
+      - "traefik.http.routers.cairn-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.cairn-web.priority=1"
+      - "traefik.http.services.cairn-web.loadbalancer.server.port=3000"
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # API — Spring Boot modular monolith (background jobs in-process, @Scheduled).
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    image: cairn-api:${CAIRN_IMAGE_TAG:-local}
+    container_name: cairn-api
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-cairn}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-cairn}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      SPRING_DATA_REDIS_HOST: valkey
+      SPRING_DATA_REDIS_PORT: "6379"
+      # Session signing key — rotating it invalidates every access token immediately.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in .env.prod}
+      # TLS is terminated at Traefik, so cookies must carry Secure.
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      AUTH_LOCAL_ENABLED: ${AUTH_LOCAL_ENABLED:-true}
+      AUTH_RATELIMIT_ENABLED: ${AUTH_RATELIMIT_ENABLED:-true}
+      # Used to build invite links.
+      APP_PUBLIC_URL: https://${CAIRN_DOMAIN:?set CAIRN_DOMAIN in .env.prod}
+      # Attachment bytes (D-028: local disk, not object storage) — must match the volume below.
+      CAIRN_STORAGE_DIR: ${CAIRN_STORAGE_DIR:-/data/attachments}
+      CAIRN_NOTIF_RETENTION_DAYS: ${CAIRN_NOTIF_RETENTION_DAYS:-90}
+      CAIRN_NOTIF_PURGE_ENABLED: ${CAIRN_NOTIF_PURGE_ENABLED:-true}
+      CAIRN_NOTIF_PURGE_CRON: ${CAIRN_NOTIF_PURGE_CRON:-0 30 3 * * *}
+      JAVA_OPTS: ${JAVA_OPTS:--XX:MaxRAMPercentage=75 -XX:+UseSerialGC}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - attachments:${CAIRN_STORAGE_DIR:-/data/attachments}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    networks:
+      - edge
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=cairn_edge"
+      # Higher priority than the web catch-all so /api/* never reaches Next.
+      - "traefik.http.routers.cairn-api.rule=Host(`${CAIRN_DOMAIN:?set CAIRN_DOMAIN in .env.prod}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.cairn-api.entrypoints=websecure"
+      - "traefik.http.routers.cairn-api.tls=true"
+      - "traefik.http.routers.cairn-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.cairn-api.priority=10"
+      - "traefik.http.routers.cairn-api.middlewares=api-headers@file"
+      - "traefik.http.services.cairn-api.loadbalancer.server.port=8080"
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16 — the only durable store for application data.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: cairn-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cairn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:-cairn}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No published ports: only the internal network can reach it.
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cairn} -d ${POSTGRES_DB:-cairn}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Valkey 8 — login rate-limit counters only (BSD-3; never Redis >= 7.4, D-021).
+  # Data here is disposable: the limiter degrades to an in-memory window if it is gone.
+  # ---------------------------------------------------------------------------
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: cairn-valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Backup sidecar — nightly pg_dump (-Fc) + attachment tarball, with retention.
+  # Same Postgres major as the server so pg_dump/pg_restore are compatible.
+  # ---------------------------------------------------------------------------
+  backup:
+    image: postgres:16-alpine
+    container_name: cairn-backup
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-cairn}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      PGDATABASE: ${POSTGRES_DB:-cairn}
+      BACKUP_DIR: /backups
+      ATTACHMENTS_DIR: /attachments
+      BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-3}
+      BACKUP_MINUTE_UTC: ${BACKUP_MINUTE_UTC:-15}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_ON_START: ${BACKUP_ON_START:-false}
+      TZ: UTC
+    entrypoint: ["/bin/sh", "/usr/local/bin/cairn-backup.sh"]
+    volumes:
+      - ./docker/backup/backup.sh:/usr/local/bin/cairn-backup.sh:ro
+      - backups:/backups
+      # Read-only: the sidecar snapshots attachments, it never writes them.
+      - attachments:/attachments:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    logging: *default-logging
+
+networks:
+  # Explicitly named so traefik.yml's `providers.docker.network: cairn_edge` and the
+  # per-service `traefik.docker.network` labels stay correct whatever the project is called.
+  edge:
+    name: cairn_edge
+  internal:
+    name: cairn_internal
+    # No route to the internet: postgres/valkey/backup cannot be reached from outside and
+    # cannot phone home.
+    internal: true
+
+volumes:
+  pgdata:
+    name: cairn_pgdata
+  attachments:
+    name: cairn_attachments
+  backups:
+    name: cairn_backups
+  acme:
+    name: cairn_acme

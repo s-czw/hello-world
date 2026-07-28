@@ -1,0 +1,51 @@
+# Traefik v3 DYNAMIC configuration — file provider (mounted read-only at /etc/traefik/dynamic).
+# Applied to every request via the websecure entrypoint (see traefik.yml).
+
+http:
+  middlewares:
+    secure-headers:
+      headers:
+        # HTTPS is terminated by Traefik; tell the backends so Spring/Next build correct URLs.
+        customRequestHeaders:
+          X-Forwarded-Proto: https
+
+        # HSTS — 1 year. Remove includeSubDomains if Cairn shares the apex with other hosts.
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: false
+        forceSTSHeader: true
+
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+        frameDeny: true
+
+        customResponseHeaders:
+          # Cairn is a first-party app; no cross-origin embedding, no browser feature access.
+          Permissions-Policy: "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+          Cross-Origin-Opener-Policy: same-origin
+          # Traefik advertises itself by default; drop it.
+          Server: ""
+          X-Powered-By: ""
+
+    # Attached to the api router: attachment downloads are user-supplied bytes served from an
+    # authenticated endpoint — never let a browser sniff or frame them.
+    api-headers:
+      headers:
+        contentTypeNosniff: true
+        frameDeny: true
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: false
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305

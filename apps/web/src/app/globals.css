@@ -1,0 +1,94 @@
+@import "../styles/tokens.css";
+@import "../styles/fonts.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: var(--text-md-lh);
+  color: var(--ink-primary);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv05", "tnum";
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/*
+ * Auto-linked URLs and @mentions inside plain-text blocks (descriptions, comments,
+ * status bodies). WCAG 1.4.1 / axe `link-in-text-block`: a link sitting in running
+ * text cannot be signalled by colour alone — accent vs --ink-secondary is only
+ * 1.2:1 — so these always carry an underline.
+ */
+.autolink {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Universal focus-visible ring — docs/03 §6.2 */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Tabular numerals for dates/counts */
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Screen-reader-only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

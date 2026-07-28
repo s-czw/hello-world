@@ -1,0 +1,256 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  JAVA_VERSION: "21"
+  # pnpm version intentionally NOT set here: it comes from `packageManager` in the root package.json.
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # (a) API — unit (mvn verify, unit lane) then integration against real Postgres
+  # ---------------------------------------------------------------------------
+  api:
+    name: api (mvn verify + integration)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cairn
+          POSTGRES_PASSWORD: cairn
+          POSTGRES_DB: cairn_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cairn"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK ${{ env.JAVA_VERSION }} (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Unit tests + build (unit lane)
+        working-directory: apps/api
+        run: ./mvnw -B -q verify
+      - name: Integration tests (real Postgres)
+        working-directory: apps/api
+        env:
+          TEST_JDBC_URL: jdbc:postgresql://cairn:cairn@127.0.0.1:5432/cairn_test
+        run: ./mvnw -B -q -Pintegration verify
+
+  # ---------------------------------------------------------------------------
+  # (b) Web — install, typecheck, lint, build
+  # ---------------------------------------------------------------------------
+  web:
+    name: web (typecheck + lint + build)
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      # No `version:` input on purpose — the root package.json `packageManager` field is the single
+      # source of truth. Setting both makes pnpm/action-setup@v4 fail with "multiple versions".
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build api-client (topological prereq for web)
+        run: pnpm --filter @cairn/api-client build
+      - name: Typecheck
+        run: pnpm --filter web typecheck
+      - name: Lint
+        run: pnpm --filter web lint
+      - name: Build
+        run: pnpm --filter web build
+
+  # ---------------------------------------------------------------------------
+  # (c) Client drift — regenerate openapi.json + typed client, expect no diff
+  # ---------------------------------------------------------------------------
+  client-drift:
+    name: client-drift (openapi + api-client)
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK ${{ env.JAVA_VERSION }} (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      # No `version:` input on purpose — the root package.json `packageManager` field is the single
+      # source of truth. Setting both makes pnpm/action-setup@v4 fail with "multiple versions".
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Regenerate OpenAPI spec (spec-writer test, DB-independent)
+        working-directory: apps/api
+        run: ./mvnw -B -q -Dtest=OpenApiSpecWriterTest -DfailIfNoTests=false test
+      - name: Regenerate typed API client
+        run: pnpm gen:client
+      - name: Fail if the committed spec/client is stale
+        run: |
+          git diff --exit-code apps/api/openapi.json packages/api-client \
+            || { echo "::error::openapi.json / api-client is stale — run 'pnpm gen:client' (after regenerating the spec) and commit."; exit 1; }
+
+  # ---------------------------------------------------------------------------
+  # (d) Supply chain — D-021 license gate for both ecosystems + the dependency audit
+  #     CLAUDE.md's Definition of Done lists `pnpm audit` as part of a green CI; it lives
+  #     here because this job already has the full workspace installed.
+  # ---------------------------------------------------------------------------
+  licenses:
+    name: licenses + audit (node + java)
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK ${{ env.JAVA_VERSION }} (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      # No `version:` input on purpose — the root package.json `packageManager` field is the single
+      # source of truth. Setting both makes pnpm/action-setup@v4 fail with "multiple versions".
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Node license gate
+        run: node scripts/check-licenses-node.mjs
+      - name: Java license gate
+        run: bash scripts/check-licenses-java.sh
+      # Fails the build on a high or critical advisory anywhere in the workspace tree.
+      # Threshold (not zero-tolerance) on purpose: `low`/`moderate` findings are almost always
+      # in dev-only tooling — today the single open one is esbuild (via tsup, a build-time dep
+      # that never ships). Raise the bar to `moderate` once that is clean.
+      - name: Dependency audit (fails on high/critical)
+        run: pnpm audit --audit-level=high
+      # Advisory: the full list, including the low/moderate findings the gate above tolerates.
+      - name: Dependency audit — full report (advisory)
+        if: always()
+        run: pnpm audit || true
+
+  # ---------------------------------------------------------------------------
+  # (e) Smoke + a11y — full stack E2E (Postgres service, api jar + web, Playwright)
+  #     `playwright test` runs both projects: `smoke` (functional happy path) and
+  #     `a11y` (axe scan of every authenticated surface; fails on serious/critical).
+  # ---------------------------------------------------------------------------
+  smoke:
+    name: smoke + a11y (playwright E2E)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cairn
+          POSTGRES_PASSWORD: cairn
+          POSTGRES_DB: cairn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cairn"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK ${{ env.JAVA_VERSION }} (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      # No `version:` input on purpose — the root package.json `packageManager` field is the single
+      # source of truth. Setting both makes pnpm/action-setup@v4 fail with "multiple versions".
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: pnpm install --frozen-lockfile
+      - name: Build API jar (skip tests — covered by the api job)
+        working-directory: apps/api
+        run: ./mvnw -B -q -DskipTests package
+      - name: Build web (+ api-client)
+        run: pnpm -r build
+      - name: Install Playwright chromium
+        run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: Run E2E smoke + axe a11y scan
+        env:
+          DB_URL: jdbc:postgresql://127.0.0.1:5432/cairn
+          DATABASE_URL: postgres://cairn:cairn@127.0.0.1:5432/cairn
+          # M3: the smoke uploads an attachment; give the API a writable storage
+          # root under the workspace (the dev default path is not writable in CI).
+          CAIRN_STORAGE_DIR: ${{ github.workspace }}/.data/attachments
+        run: node scripts/run-e2e.mjs
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+      # The axe run always writes its full violation list (incl. the moderate/minor
+      # findings that do not fail the gate) — keep it whether or not the job passed.
+      - name: Upload axe a11y report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-report
+          path: apps/web/test-results/a11y-report.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # (f) Deploy stack — static validation of the compose files (M4 item D)
+  #     Images are NOT built here (that needs a registry pull and several minutes);
+  #     `config -q` catches schema errors, bad interpolation and broken depends_on,
+  #     which is what actually rots when the app changes.
+  # ---------------------------------------------------------------------------
+  deploy-config:
+    name: deploy-config (compose validation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the dev compose file
+        run: docker compose -f docker-compose.yml config -q
+      - name: Validate the production compose file
+        run: docker compose -f docker-compose.prod.yml --env-file .env.prod.example config -q
+      - name: Fail if a required variable stopped being required
+        run: |
+          if docker compose -f docker-compose.prod.yml --env-file /dev/null config -q 2>/dev/null; then
+            echo "::error::docker-compose.prod.yml resolved with no environment — the \${VAR:?} guards on the required secrets are gone."
+            exit 1
+          fi
+          echo "required-variable guards are intact"

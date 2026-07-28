@@ -1,0 +1,31 @@
+# Cairn Java runtime license allowlist (D-021).
+# One accepted license token per line (matched case-insensitively as a substring
+# against the parenthesized license annotations in target/.../THIRD-PARTY.txt).
+# A dependency passes if at least one of its license annotations matches a token
+# here. Weak-copyleft tokens (LGPL/EPL/MPL/CDDL) are handled separately as WARN
+# by check-licenses-java.sh; strong copyleft (GPL/AGPL/SSPL/...) always FAILs.
+# Lines starting with '#' and blank lines are ignored.
+
+Apache-2.0
+Apache License, Version 2.0
+Apache Software License
+MIT
+MIT-0
+MIT License
+BSD-2-Clause
+BSD-3-Clause
+The BSD License
+New BSD License
+ISC
+PostgreSQL
+# Eclipse Distribution License v1.0 == BSD-3-Clause (permissive)
+EDL 1.0
+Eclipse Distribution License
+# Bouncy Castle Licence is an MIT-style permissive license (see arch licensing appendix)
+Bouncy Castle Licence
+Bouncy Castle License
+CC0
+Public Domain
+Unlicense
+SIL Open Font License
+OFL-1.1

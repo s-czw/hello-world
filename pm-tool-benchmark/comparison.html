@@ -1,0 +1,781 @@
+<title>PM Tool Benchmark · July 2026</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --accent: #2a78d6;
+    --accent-strong: #1c5cab;
+    --accent-wash: rgba(42, 120, 214, 0.09);
+    --good: #006300;
+    --s1: #86b6ef; --s2: #5598e7; --s3: #2a78d6; --s4: #1c5cab; --s5: #104281;
+    --s1-ink: #0b0b0b; --s2-ink: #0b0b0b; --s3-ink: #ffffff; --s4-ink: #ffffff; --s5-ink: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --accent: #3987e5;
+      --accent-strong: #6da7ec;
+      --accent-wash: rgba(57, 135, 229, 0.16);
+      --good: #0ca30c;
+      --s1: #9ec5f4; --s2: #6da7ec; --s3: #3987e5; --s4: #256abf; --s5: #184f95;
+      --s1-ink: #0b0b0b; --s2-ink: #0b0b0b; --s3-ink: #ffffff; --s4-ink: #ffffff; --s5-ink: #ffffff;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #3987e5;
+    --accent-strong: #6da7ec;
+    --accent-wash: rgba(57, 135, 229, 0.16);
+    --good: #0ca30c;
+    --s1: #9ec5f4; --s2: #6da7ec; --s3: #3987e5; --s4: #256abf; --s5: #184f95;
+    --s1-ink: #0b0b0b; --s2-ink: #0b0b0b; --s3-ink: #ffffff; --s4-ink: #ffffff; --s5-ink: #ffffff;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  .eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 10px;
+  }
+  h1 {
+    font-size: clamp(26px, 4.5vw, 38px); line-height: 1.15; letter-spacing: -0.015em;
+    margin: 0 0 12px; text-wrap: balance;
+  }
+  .lede { color: var(--ink-2); max-width: 68ch; margin: 0; }
+  .lede strong { color: var(--ink); }
+
+  h2 { font-size: 21px; letter-spacing: -0.01em; margin: 0 0 4px; text-wrap: balance; }
+  .section { margin-top: 56px; }
+  .section-sub { color: var(--ink-2); font-size: 14.5px; margin: 0 0 20px; max-width: 74ch; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  }
+
+  /* ---------- verdict cards ---------- */
+  .verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 22px; }
+  .verdict { padding: 20px 20px 18px; position: relative; }
+  .verdict .tag {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent-strong); margin-bottom: 10px;
+  }
+  .verdict h3 { margin: 0 0 2px; font-size: 18px; }
+  .verdict .tier { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+  .verdict p { margin: 0; font-size: 14px; color: var(--ink-2); }
+  .verdict .caveat { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--grid); font-size: 13px; color: var(--muted); }
+  .verdict.lead { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+
+  /* ---------- weights + ranking ---------- */
+  .rank-grid { display: grid; grid-template-columns: 300px 1fr; gap: 24px; margin-top: 22px; }
+  @media (max-width: 760px) { .rank-grid { grid-template-columns: 1fr; } }
+  .weights { padding: 18px; align-self: start; }
+  .weights h3 { margin: 0 0 4px; font-size: 14px; }
+  .weights .hint { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+  .wrow { margin-bottom: 12px; }
+  .wrow label { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-2); margin-bottom: 3px; }
+  .wrow label .pct { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .reset-btn {
+    margin-top: 4px; font: 600 12.5px system-ui, sans-serif; color: var(--accent-strong);
+    background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  }
+  .reset-btn:hover { background: var(--accent-wash); }
+
+  .ranking { padding: 22px; }
+  .rbar-row { display: grid; grid-template-columns: 150px 1fr 52px; gap: 10px; align-items: center; padding: 7px 0; }
+  .rbar-row .rname { font-size: 14px; text-align: right; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rbar-row.top .rname { color: var(--ink); font-weight: 650; }
+  .rtrack { height: 22px; background: none; position: relative; border-left: 2px solid var(--baseline); }
+  .rfill {
+    position: absolute; inset: 0 auto 0 0; border-radius: 0 4px 4px 0;
+    background: var(--accent); opacity: 0.75; min-width: 2px;
+  }
+  .rbar-row.top .rfill { opacity: 1; background: var(--accent-strong); }
+  .rval { font-size: 13.5px; font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+  .rank-note { font-size: 12.5px; color: var(--muted); margin: 14px 0 0; }
+
+  /* ---------- scorecard ---------- */
+  .table-scroll { overflow-x: auto; margin-top: 22px; }
+  table.score { border-collapse: collapse; width: 100%; min-width: 860px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  table.score th, table.score td { padding: 9px 10px; text-align: center; border-bottom: 1px solid var(--grid); }
+  table.score thead th {
+    font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
+    font-weight: 600; border-bottom: 1px solid var(--baseline); background: var(--surface);
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  table.score thead th:hover { color: var(--ink); }
+  table.score thead th .arrow { font-size: 10px; }
+  table.score td.tool, table.score th.tool { text-align: left; min-width: 170px; }
+  table.score td.tool { font-weight: 600; font-size: 14.5px; white-space: nowrap; }
+  table.score td.tool .tier-chip { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+  table.score tbody tr:last-child td { border-bottom: none; }
+  table.score td.wtot { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14.5px; }
+
+  .chip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 26px; border-radius: 4px; font-size: 13.5px; font-weight: 700;
+    font-variant-numeric: tabular-nums; border: none; cursor: pointer; padding: 0;
+    font-family: inherit;
+  }
+  .chip:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .chip.sel { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .c1 { background: var(--s1); color: var(--s1-ink); }
+  .c2 { background: var(--s2); color: var(--s2-ink); }
+  .c3 { background: var(--s3); color: var(--s3-ink); }
+  .c4 { background: var(--s4); color: var(--s4-ink); }
+  .c5 { background: var(--s5); color: var(--s5-ink); }
+
+  .legend { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+  .legend .lchips { display: flex; gap: 3px; }
+  .legend .lchip { width: 22px; height: 14px; border-radius: 3px; }
+
+  #cell-detail {
+    margin-top: 14px; padding: 14px 16px; font-size: 14px; color: var(--ink-2);
+    border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  }
+  #cell-detail strong { color: var(--ink); }
+  #cell-detail .empty { color: var(--muted); }
+
+  /* ---------- pricing ---------- */
+  .price-controls { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-end; margin: 22px 0 6px; padding: 16px 18px; }
+  .seat-ctl { min-width: 260px; flex: 1; }
+  .seat-ctl label { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-2); margin-bottom: 4px; }
+  .seat-ctl .seats { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); font-size: 15px; }
+  .mix-ctl { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-2); padding-bottom: 4px; }
+  .mix-ctl input { accent-color: var(--accent); width: 15px; height: 15px; }
+
+  .pbar-row { display: grid; grid-template-columns: 190px 1fr 150px; gap: 10px; align-items: center; padding: 8px 0; }
+  @media (max-width: 640px) { .pbar-row { grid-template-columns: 130px 1fr 110px; } }
+  .pbar-row .pname { text-align: right; font-size: 14px; color: var(--ink-2); line-height: 1.25; }
+  .pbar-row .pname b { color: var(--ink); font-weight: 600; display: block; }
+  .pbar-row .pname small { font-size: 11.5px; color: var(--muted); }
+  .ptrack { height: 22px; position: relative; border-left: 2px solid var(--baseline); }
+  .pfill { position: absolute; inset: 0 auto 0 0; background: var(--accent); opacity: 0.75; border-radius: 0 4px 4px 0; min-width: 2px; }
+  .pval { font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .pval b { font-size: 14.5px; }
+  .pval small { color: var(--muted); display: block; font-size: 11.5px; }
+  .pricing-box { padding: 22px; margin-top: 10px; }
+  .price-note { font-size: 12.5px; color: var(--muted); margin: 16px 0 0; max-width: 80ch; }
+
+  /* ---------- profiles ---------- */
+  .profiles { display: grid; gap: 10px; margin-top: 22px; }
+  details.profile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  details.profile summary {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    padding: 15px 18px; cursor: pointer; list-style: none; font-size: 15.5px; font-weight: 650;
+  }
+  details.profile summary::-webkit-details-marker { display: none; }
+  details.profile summary::before { content: "+"; color: var(--muted); font-weight: 400; width: 14px; display: inline-block; }
+  details.profile[open] summary::before { content: "–"; }
+  details.profile summary .sub { font-size: 13px; font-weight: 400; color: var(--muted); }
+  details.profile summary .rating { margin-left: auto; font-size: 12.5px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pbody { padding: 2px 20px 18px 44px; font-size: 14px; color: var(--ink-2); }
+  .pbody h4 { font-size: 12px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin: 16px 0 5px; }
+  .pbody h4:first-child { margin-top: 0; }
+  .pbody p { margin: 0 0 6px; max-width: 82ch; }
+  .pbody ul { margin: 0; padding-left: 18px; }
+  .pbody li { margin-bottom: 4px; max-width: 80ch; }
+  .flag { color: var(--muted); font-style: italic; }
+
+  /* ---------- method ---------- */
+  .method { font-size: 14px; color: var(--ink-2); max-width: 80ch; }
+  .method p { margin: 0 0 10px; }
+  .method a { color: var(--accent-strong); }
+
+  footer { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--grid); font-size: 12.5px; color: var(--muted); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .rfill, .pfill { transition: width 0.35s ease; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Program &amp; project management · tool benchmark · July 2026</p>
+    <h1>Nine PM platforms, scored for a Microsoft&nbsp;365 team that runs programs</h1>
+    <p class="lede">
+      Benchmark of <strong>Jira, Monday.com, Asana, ClickUp, Wrike, Smartsheet, Microsoft Planner/Project, Airtable, and Zoho Projects</strong>
+      for a 10–50 person team doing mixed operations work. Two hard requirements drove the scoring:
+      a <strong>program/portfolio layer</strong> (multi-project roll-ups, cross-project Gantt and dependencies, portfolio dashboards)
+      and <strong>deep Microsoft&nbsp;365 / Teams integration</strong>. Pricing and features verified as of 20&nbsp;July&nbsp;2026.
+    </p>
+  </header>
+
+  <section class="section" id="verdict">
+    <h2>The verdict</h2>
+    <p class="section-sub">Based on the default weighting below, which puts half the total weight on the two must-haves. Drag the sliders in the next section to stress-test these picks against your own priorities.</p>
+    <div class="verdicts">
+      <div class="verdict card lead">
+        <span class="tag">Top pick</span>
+        <h3>Asana</h3>
+        <p class="tier">Advanced · $24.99/user/mo · 4.40 weighted</p>
+        <p>The only tool that satisfies both must-haves out of the box on a published tier: unlimited and nested Portfolios with cross-project Gantt, workload and Goals — plus the deepest third-party Microsoft stack (native Teams app, Outlook add-in, certified Power Automate connector, and a native Power BI connector).</p>
+        <p class="caveat">Caveats: priciest published portfolio tier here ($625/mo at 25 seats); SAML SSO requires Enterprise; no built-in docs surface.</p>
+      </div>
+      <div class="verdict card">
+        <span class="tag">Runner-up</span>
+        <h3>Smartsheet</h3>
+        <p class="tier">Business · $19/member/mo · 4.20 weighted</p>
+        <p>Equal-deepest M365 integration — the only tool with official Microsoft-published Power Automate <em>and</em> Power BI connectors, plus Teams tabs with in-Teams approvals. Reports roll up thousands of sheets into portfolio Gantt dashboards, and external guests are free and unlimited.</p>
+        <p class="caveat">Caveats: dependencies work within a single sheet only; full program governance (Control Center) is a custom-priced add-on; SSO is Enterprise-only.</p>
+      </div>
+      <div class="verdict card">
+        <span class="tag">Value pick</span>
+        <h3>Zoho Projects</h3>
+        <p class="tier">Enterprise · $9/user/mo · 3.70 weighted</p>
+        <p>A genuine portfolio layer — portfolio dashboard, global Gantt, and real inter-project dependencies — at $225/mo for 25 users, roughly a third of the other portfolio-capable tiers. Solid Teams tab app, Outlook add-in, and even an M365 Copilot app.</p>
+        <p class="caveat">Caveats: busier UI with a 2–3 week onboarding curve; no Power Automate or Power BI connectors; lighter admin governance.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="ranking">
+    <h2>Weighted ranking — set your own priorities</h2>
+    <p class="section-sub">Each tool is scored 1–5 per criterion (justifications in the scorecard below). The ranking recomputes live as you adjust how much each criterion matters.</p>
+    <div class="rank-grid">
+      <div class="weights card">
+        <h3>Criterion weights</h3>
+        <p class="hint">Defaults reflect the stated must-haves. Weights are normalized to 100%.</p>
+        <div id="weight-rows"></div>
+        <button class="reset-btn" id="reset-weights" type="button">Reset to defaults</button>
+      </div>
+      <div class="ranking card">
+        <div id="rank-bars" aria-live="polite"></div>
+        <p class="rank-note">Weighted score out of 5. Bars re-sort as weights change; the leader is emphasized.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scorecard">
+    <h2>Scorecard — nine tools × seven criteria</h2>
+    <p class="section-sub">Click any score to read the justification beneath the table. Click a column heading to sort by that criterion; click “Tool” to restore the weighted order.</p>
+    <div class="table-scroll">
+      <table class="score" id="score-table"></table>
+    </div>
+    <div class="legend" aria-hidden="true">
+      <span>Score</span>
+      <span class="lchips">
+        <span class="lchip c1"></span><span class="lchip c2"></span><span class="lchip c3"></span><span class="lchip c4"></span><span class="lchip c5"></span>
+      </span>
+      <span>1 = weak · 5 = excellent · half-points shown as .5</span>
+    </div>
+    <div id="cell-detail"><span class="empty">Select a score above to see why it was given.</span></div>
+  </section>
+
+  <section class="section" id="pricing">
+    <h2>What it costs at your seat count</h2>
+    <p class="section-sub">Estimated monthly cost on the <em>portfolio-capable</em> tier of each tool, at annual billing, including each vendor’s minimum-seat and seat-bundle rounding. Drag the slider to your team size.</p>
+    <div class="price-controls card">
+      <div class="seat-ctl">
+        <label for="seat-slider"><span>Team size</span><span class="seats"><span id="seat-count">25</span> users</span></label>
+        <input type="range" id="seat-slider" min="10" max="50" value="25" step="1" />
+      </div>
+      <label class="mix-ctl" for="planner-mix">
+        <input type="checkbox" id="planner-mix" />
+        <span>Planner: mixed licensing — 1&nbsp;in&nbsp;5 users on Plan&nbsp;3 (portfolio creators), rest on Plan&nbsp;1</span>
+      </label>
+    </div>
+    <div class="pricing-box card">
+      <div id="price-bars" aria-live="polite"></div>
+      <p class="price-note" id="price-footnotes"></p>
+    </div>
+  </section>
+
+  <section class="section" id="profiles">
+    <h2>Tool profiles</h2>
+    <p class="section-sub">What each platform’s portfolio layer actually is, how deep the Microsoft 365 integration goes, and what to watch out for. Items that could not be confirmed against a primary source are flagged as unverified.</p>
+    <div class="profiles" id="profile-list"></div>
+  </section>
+
+  <section class="section" id="method">
+    <h2>Method &amp; sources</h2>
+    <div class="method card" style="padding: 20px 22px;">
+      <p><strong>How this was researched.</strong> Three parallel research passes on 20 July 2026, each covering three tools, using vendor pricing/feature pages, vendor help-center documentation, Microsoft Learn/AppSource listings, G2 and Capterra, and 2025–2026 analyst comparisons (Gartner MQ for Adaptive Project Management &amp; Reporting, Forbes Advisor, PCMag, TechRadar). Several vendor pricing pages block automated access, so figures were cross-checked across at least two independent 2026-dated sources; the top three tools’ prices were re-verified separately. Scores are 1–5 judgments against this team’s specific context (10–50 seats, mixed ops, M365 shop) — not absolute product quality.</p>
+      <p><strong>Analyst signals.</strong> Gartner Leaders (2024–25): Monday.com (4 consecutive years), Asana, Atlassian. G2 positions Smartsheet as the pick for “large-scale project &amp; portfolio planning”. PCMag Editors’ Choice: Zoho Projects and Asana. Forbes Advisor (Feb 2026) rates Monday.com “best for new teams” and ClickUp best value for most SMBs.</p>
+      <p><strong>Key dated facts.</strong> Jira Work Management merged into Jira (2024). Microsoft retired Project for the web in Aug 2025; its successor is Planner “premium plans” with the new Portfolios feature; Project Online retires 30 Sep 2026. Wrike’s standalone Enterprise plan is end-of-sale, replaced by Pinnacle/Apex. Smartsheet moved to a member/guest subscription model (guests free and unlimited).</p>
+      <p><strong>Full source list</strong> (per-tool URLs and access dates) lives in <code>pm-tool-benchmark/research-notes.md</code> in the repository alongside this page.</p>
+    </div>
+  </section>
+
+  <footer>
+    Prepared 20 July 2026 · Prices are list, per user per month at annual billing, USD, and change frequently — reconfirm with vendors before purchase. Scores reflect fit for a 10–50 seat mixed-operations team in a Microsoft 365 environment.
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CRITERIA = [
+    { key: "portfolio", label: "Portfolio", full: "Program/portfolio capability", def: 25,
+      desc: "Multi-project roll-ups, cross-project Gantt & dependencies, portfolio dashboards, goals." },
+    { key: "m365", label: "M365", full: "Microsoft 365 / Teams integration", def: 25,
+      desc: "Native Teams app quality, Outlook, SharePoint/OneDrive, Power Automate & Power BI connectors." },
+    { key: "ops_fit", label: "Ops fit", full: "Fit for mixed/general ops", def: 15,
+      desc: "Custom workflows, non-dev templates, forms, automations, docs." },
+    { key: "reporting", label: "Reporting", full: "Reporting & dashboards", def: 10,
+      desc: "Dashboards, cross-project reports, BI paths." },
+    { key: "ease", label: "Ease", full: "Ease of use / adoption", def: 10,
+      desc: "Learning curve, UI quality, self-serve adoption for non-technical users." },
+    { key: "pricing_value", label: "Value", full: "Pricing value at 10–50 seats", def: 10,
+      desc: "Cost of the tier that actually unlocks portfolio features." },
+    { key: "admin", label: "Admin", full: "Guests, SSO & governance", def: 5,
+      desc: "External guest access, SSO availability, admin & governance controls." }
+  ];
+
+  /* Pricing model: perUser rate on the portfolio-capable tier (annual billing),
+     with each vendor's published minimums / seat-bundle rounding. */
+  var TOOLS = [
+    {
+      id: "asana", name: "Asana", tier: "Advanced",
+      scores: {
+        portfolio: [5, "Portfolios on Advanced is the most complete mid-market portfolio layer benchmarked: unlimited portfolios with status, timeline and workload roll-ups, portfolio-level Gantt, nested portfolios for program structure, and native Goals tied to work — with no enterprise upsell."],
+        m365: [5, "Deepest third-party Microsoft stack: a well-regarded native Teams app (tasks from messages, portfolio tabs, meetings support), Outlook add-in, OneDrive/SharePoint file attach, a certified Power Automate connector, and the only native Power BI connector among the non-Microsoft tools (Advanced+)."],
+        ops_fit: [4, "Strong for general ops — branching forms, rules/automation, approvals, proofing, workload — but no native docs surface, and the opinionated task model suits free-form ops work less than Monday's boards."],
+        reporting: [4, "Universal Reporting dashboards across projects, portfolios and goals, with portfolio dashboards built in; slightly fewer widget options than Monday; heavy BI leans on the Power BI connector."],
+        ease: [4, "Clean, consumer-grade UX with fast onboarding; the layered concepts (tasks → projects → portfolios → goals) take some orientation for casual users."],
+        pricing_value: [3, "Advanced at $24.99/user is the priciest published portfolio tier here (~1.7× Jira Premium); seats sold in buckets of 5 above 5 users; you do get everything needed in one tier."],
+        admin: [4, "Free unlimited guests on all paid plans — the best external-access model benchmarked — and a solid admin console; SAML SSO/SCIM requires Enterprise."]
+      },
+      price: { perUser: 24.99, tierNote: "Advanced, annual", round: "asana", note: "Seats in buckets of 5 above 5 users; SSO needs Enterprise" },
+      ratings: "G2 4.4 · Capterra 4.5",
+      profile: {
+        what: "Work management platform with the strongest out-of-the-box program layer of the nine. Gartner Leader (2024) and repeat PCMag Editors' Choice.",
+        portfolio: "“Portfolios” (Advanced+): unlimited projects per portfolio with live status/priority/custom-field roll-ups, portfolio timeline (Gantt), nested portfolios for program → portfolio structure, cross-project Portfolio Workload, and Goals linked to real work. Cross-project dependency visualization is timeline-based rather than a dedicated dependency workspace.",
+        m365: "Native Teams app (convert Teams messages to tasks, pin projects and portfolios as tabs, meetings integration), Outlook add-in (email → task), OneDrive/SharePoint file attach, certified Power Automate connector, native Power BI connector (Advanced+). File-level SharePoint only — no list/site sync.",
+        pricing: "Free (≤10 teammates, no Gantt) · Starter $10.99 (no portfolios) · Advanced $24.99 unlocks Portfolios + Goals · Enterprise custom for SAML SSO/SCIM. 25 users on Advanced = $624.75/mo annual.",
+        watch: ["Portfolio features are entirely absent below Advanced — no cheap trial path.", "SAML SSO gated to custom-priced Enterprise.", "Per-portfolio item caps exist but current numbers are unverified."]
+      }
+    },
+    {
+      id: "smartsheet", name: "Smartsheet", tier: "Business",
+      scores: {
+        portfolio: [4, "Reports aggregate up to 30,000 sheets into cross-project Gantt dashboards, and Control Center is arguably the strongest program-governance engine benchmarked (blueprints, automated project provisioning, program roll-ups) — but Control Center is a custom-priced add-on, and cross-sheet dependencies need manual cell links."],
+        m365: [5, "Deepest M365 stack of the nine third-party tools: official Microsoft-published Power Automate connector, official Power BI connector, Teams app with sheet/report/dashboard tabs plus in-Teams approvals via bot, Outlook add-in that creates and edits rows from email. Formal Microsoft partnership."],
+        ops_fit: [4, "Spreadsheet-native paradigm fits ops teams; forms, robust automations, proofing, document builder, unlimited free collaborators; weaker on native docs/chat, and advanced builds need formula and cell-link skills."],
+        reporting: [4, "Row and sheet-summary reports roll portfolios into live dashboards with chart and Gantt widgets, plus the official Power BI connector for BI-grade analysis."],
+        ease: [4, "Gentlest adoption for Excel-fluent staff — familiar grid, clean UI, easy dashboards; complexity rises sharply with cross-sheet formulas and Control Center."],
+        pricing_value: [3.5, "Business at $19 with unlimited free guest editors is good value, but the true program layer (Control Center) and SSO sit behind custom quotes, making full-requirement TCO opaque."],
+        admin: [4, "Unlimited free guest/contributor seats with dedicated external-governance policies and a strong Admin Center; SAML SSO and domain control are Enterprise-only; the provisional-member auto-convert mechanic needs admin oversight."]
+      },
+      price: { perUser: 19, tierNote: "Business, annual", round: "min3", note: "+ Control Center (custom quote) for full program governance" },
+      ratings: "G2 4.4 · Capterra 4.5",
+      profile: {
+        what: "Spreadsheet-native work platform; the analyst pick for large-scale project & portfolio planning (G2 category positioning).",
+        portfolio: "Reports (row + sheet-summary) consolidate up to 30,000 sheets, render as Gantt, and pin to live dashboards; sheet-summary reports aggregate project health/status/percent-complete into one portfolio grid. Control Center (custom-priced add-on or the Advanced Work Management tier) adds blueprint-based project provisioning, program roll-ups and change management at scale. Dependencies (predecessors) work within a single sheet only.",
+        m365: "Teams app: sheets, reports and dashboards as channel tabs; bot delivers reminders and actionable approval/update requests as DMs (Business+). Outlook add-in creates/edits rows from the inbox. Official Microsoft-published Power Automate connector and official Power BI connector — the only tool benchmarked with both.",
+        pricing: "Pro $9 (max 10 members, guests view-only) · Business $19, 3-member minimum, unlimited free guest editors, 1 TB · Enterprise custom (SSO, governance, ~$30–50 est., unverified) · Control Center custom add-on. 25 members on Business = $475/mo annual.",
+        watch: ["Cross-sheet dependencies require manual cell-linking — no native cross-project dependency engine without workarounds.", "Control Center pricing is quote-only and typically bundled with consulting.", "Provisional members auto-convert to paid after 90 days unless reconciled.", "No free plan for new customers (30-day trial instead; legacy free plan status unverified)."]
+      }
+    },
+    {
+      id: "wrike", name: "Wrike", tier: "Business",
+      scores: {
+        portfolio: [5, "Native nested hierarchy (Space → Folder → Project) where folders act as programs/portfolios: project-level status roll-ups, cross-project Gantt with four dependency types, critical path and baselines, and real-time portfolio dashboards are core product — not assembled workarounds."],
+        m365: [4.5, "Deep official Microsoft partnership: Teams tabs where you can view and edit tasks (incl. Gantt view), actionable bot notifications, Outlook add-in plus Actionable Messages, SharePoint/OneDrive attach, and an official Power BI connector bundled in Power BI Desktop. Docked: Gantt in Teams is view-only and Power Automate needs the Wrike Integrate add-on."],
+        ops_fit: [4, "Dynamic request forms, custom item types, blueprints, approvals and proofing suit PMO/ops well; weaker as an everything-hub (no docs/whiteboards/chat), and forms require Business."],
+        reporting: [4, "Real-time dashboards, progress/performance reports, resource and utilization reporting on Business; the deepest analytics (Wrike Analyze) is reserved for Pinnacle."],
+        ease: [3, "The most common review complaint is the steep learning curve and dense interface for non-technical users; powerful once the structure is learned."],
+        pricing_value: [3, "Business at ~$25 is the priciest self-serve tier benchmarked ($625/mo at 25 seats), sold annual-only in bands of five, and SSO still isn't included at that tier."],
+        admin: [3.5, "Free Collaborator role (the greater of 20 or 15% of paid seats), granular access roles and user groups; SAML SSO only arrives on Pinnacle/Apex (or legacy Enterprise)."]
+      },
+      price: { perUser: 25, tierNote: "Business, annual only", round: "wrike", note: "Sold in bands of 5 (≤30 seats); SSO needs Pinnacle" },
+      ratings: "G2 4.2 · Capterra 4.4",
+      profile: {
+        what: "Structured professional-services / PMO platform with the deepest true project-portfolio structure of the nine.",
+        portfolio: "No single “portfolio” object — the whole hierarchy is one: Spaces → Folders (programs/portfolios) → Projects → Tasks. Open any folder in Gantt view to see all child projects on one timeline with four dependency types including cross-project dependencies, critical path, baselines and drag-to-reschedule with automatic dependent-task adjustment. Portfolio budgeting and Wrike Analyze BI require Pinnacle.",
+        m365: "Teams: folders/projects/Spaces as channel tabs with create/edit/comment and List or Gantt views in Teams; actionable notifications (change status or due date from the chat). Outlook add-in + Actionable Messages (act on tasks from email notifications). Official Power BI connector ships inside Power BI Desktop. No certified Power Automate connector — the Wrike Integrate (Workato) add-on covers automation.",
+        pricing: "Free · Team $10 (2–15 users, no request forms) · Business ~$25, 5-seat minimum, bands of 5 · Pinnacle/Apex custom (SSO, Analyze, budgeting; standalone Enterprise plan is end-of-sale). 25 users on Business = $625/mo annual.",
+        watch: ["Annual-billing only from Business up.", "SAML SSO is two tiers above the portfolio tier.", "Team-plan user cap conflicting across sources (15 vs 25, unverified).", "Pinnacle/Apex street pricing ~$40–80/user is estimate-only (custom quotes)."]
+      }
+    },
+    {
+      id: "planner", name: "MS Planner / Project", tier: "Plan 3",
+      scores: {
+        portfolio: [4, "The new native Portfolios feature (Plan 3/5) groups premium plans with a consolidated task list and a Roadmap timeline of every plan; Plan 5 adds portfolio optimization and demand management. Docked: portfolios accept premium plans only, and cross-plan task dependencies are not supported."],
+        m365: [5, "It is Microsoft 365: first-class Teams app, Entra ID, M365 Groups and SharePoint backing, native Power Automate connector (basic plans; premium plans via Dataverse), Power BI via Dataverse. Nothing else matches this depth."],
+        ops_fit: [3, "Good templates, custom fields and goals for general task/project work, but no in-app forms (Microsoft Forms), no in-app automation rules (Power Automate), and docs live elsewhere (SharePoint/Loop)."],
+        reporting: [3, "Per-plan charts and Goals/People views are decent, but there is no built-in portfolio-level dashboard — real portfolio reporting means building Power BI reports against Dataverse tables."],
+        ease: [4, "Familiar Microsoft UI inside Teams; basic Planner is near zero-training. The basic-vs-premium plan split and Plan 1/3/5 licensing maze cause genuine confusion."],
+        pricing_value: [3, "Portfolio creation costs $30/user (Plan 3) — three times Zoho Enterprise — but mixed licensing (only portfolio creators need Plan 3; members on Plan 1) and the $0 basic Planner already in M365 soften it."],
+        admin: [4, "Entra ID SSO, M365 governance, DLP and compliance inherited for free. Premium-plan guest sharing is clunky (guests must join the whole Team; no individual plan sharing)."]
+      },
+      price: { perUser: 30, tierNote: "Planner & Project Plan 3, annual", round: "exact", note: "Mixed licensing toggle: creators on Plan 3, members on Plan 1 ($10)" },
+      ratings: "G2 4.2 · Capterra 4.3",
+      profile: {
+        what: "Microsoft's unified planner — To Do + classic Planner + the former Project for the web, now one app in Teams and on the web. The default choice if staying all-Microsoft outweighs feature depth.",
+        portfolio: "“Portfolios” (rolled out through 2025, replacing the retired Roadmap app): groups related premium plans with consolidated progress and a Roadmap view — each plan a row on a shared timeline. Plan 5 adds portfolio selection/optimization and demand management. Limits: premium plans only (basic plans can't join), no cross-plan task dependencies, no cross-plan resource view, portfolio reporting requires DIY Power BI on Dataverse.",
+        m365: "Native and unmatched: pinnable Teams app with plans as channel tabs; To Do/flagged email in My Day; every basic plan backed by an M365 Group + SharePoint site; Planner web part for SharePoint pages; native Power Automate connector (basic plans — premium plans automate via the Dataverse connector); Power BI via Dataverse tables.",
+        pricing: "Basic Planner: $0, included in M365 (no Gantt/dependencies) · Plan 1 $10 (premium plans: Gantt, dependencies — but cannot create portfolios) · Plan 3 $30 unlocks Portfolios, baselines, critical path · Plan 5 $55 adds portfolio optimization. Licenses mix per user: 25 users all-Plan 3 = $750/mo; realistic 5×Plan 3 + 20×Plan 1 = $350/mo.",
+        watch: ["Project for the web retired Aug 2025; Project Online retires 30 Sep 2026 — check any legacy Project estate before committing.", "Basic and premium plans have split storage, APIs and licensing — automation and reporting differ per plan type.", "No built-in portfolio dashboards — budget IT time for Power BI.", "Max plans per portfolio unpublished (unverified)."]
+      }
+    },
+    {
+      id: "zoho", name: "Zoho Projects", tier: "Enterprise",
+      scores: {
+        portfolio: [4, "Enterprise tier has a genuine portfolio layer: Portfolio Dashboard, a Global Gantt spanning all projects, and — uniquely at this price — real inter-project task dependencies, plus critical path, baselines and project groups. Lacks demand-management/portfolio-optimization features."],
+        m365: [3, "Good third-party story: a real Teams tab app (near-full web app incl. Gantt and Issues tabs) plus notification bot, Outlook add-in with action cards, Outlook calendar sync, M365 user import, Entra SAML SSO, and an M365 Copilot app. But no certified Power Automate connector, no Power BI connector, and no SharePoint document integration."],
+        ops_fit: [4, "Blueprints (no-code workflow automation with approvals), custom fields/layouts/statuses, issue tracking, timesheets and budgets suit structured ops work; less freeform than Airtable and templates skew classic-PM."],
+        reporting: [4, "Portfolio dashboards, resource utilization, planned-vs-actual and budget reports; deeper BI goes through Zoho Analytics (a separate product) rather than Power BI."],
+        ease: [3, "Reviewers praise capability-for-price but consistently cite a busy UI and a 2–3 week onboarding curve; mobile is weaker for Gantt and reporting."],
+        pricing_value: [5, "The outlier: a full portfolio layer at $9/user — roughly a third of Planner Plan 3 and a fifth of Airtable Business. $225/mo for 25 users."],
+        admin: [3, "SAML SSO via Entra ID and a client-user model for externals, but read-only users are capped per tier (~10 on Enterprise, unverified) and governance tooling is lighter than Microsoft's or Airtable's."]
+      },
+      price: { perUser: 9, tierNote: "Enterprise, annual", round: "exact", note: "PCMag Editors' Choice; no Power Automate / Power BI connectors" },
+      ratings: "G2 4.3 · Capterra 4.5",
+      profile: {
+        what: "The budget pick with real PPM features — PCMag Editors' Choice for project management. Also bundled inside Zoho One if broader Zoho adoption is ever on the table.",
+        portfolio: "Portfolio Dashboard + Global Gantt Chart + inter-project dependencies (Enterprise): one Gantt spans all projects and dependencies can link tasks across different projects — something neither Planner nor Airtable does natively. Critical path and baselines per project; project groups for program-style organization; cross-project resource utilization.",
+        m365: "Official Teams app embeds the near-full Projects web app as channel tabs (incl. dedicated Gantt and Issues tabs) with a notification bot. Outlook/M365 add-in: tasks from the mailbox via action cards, Outlook Calendar sync, M365 user import, Microsoft sign-in, Entra SAML SSO. A Zoho Projects app for Microsoft 365 Copilot enables natural-language queries over tasks. Gaps: no certified Power Automate connector (Zoho Flow/webhooks instead), no Power BI connector (Zoho Analytics instead), no SharePoint document-library integration.",
+        pricing: "Free (5 users, 3 projects) · Premium $4 (≤50 users, no portfolio) · Enterprise $9 unlocks the portfolio layer, unlimited users · Ultimate $14. 25 users on Enterprise = $225/mo annual.",
+        watch: ["Automation beyond Blueprints runs through Zoho Flow — an extra product to learn.", "Read-only user caps per tier reported (~10 Enterprise / 100 Ultimate, unverified).", "Exact G2/Capterra review counts unverified."]
+      }
+    },
+    {
+      id: "monday", name: "Monday.com", tier: "Pro*",
+      scores: {
+        portfolio: [3, "Pro gets a credible DIY roll-up (dashboards combining up to 20 boards, Gantt widget, dependency columns), but the actual Portfolio solution — portfolio boards, cross-project dependencies, resource planner, AI risk insights — is Enterprise-only at custom pricing, which undercuts a hard portfolio requirement at 10–50 seats."],
+        m365: [3, "Native Teams app (boards as full-featured tabs, bot, notifications), genuinely good two-way Outlook calendar sync and email-to-item, OneDrive and Entra ID — but no native Power BI connector and no certified Power Automate connector (both third-party), and SAML SSO is Enterprise-only."],
+        ops_fit: [5, "Built precisely for mixed/general ops: fully custom boards and workflows, 200+ non-dev templates, WorkForms, monday Docs, and no-code automations — its home turf."],
+        reporting: [4, "Attractive widget-based dashboards; the caveat is tier-gating — 5 boards per dashboard on Standard, 20 on Pro, 50 on Enterprise — with advanced analytics living in Enterprise."],
+        ease: [5, "Best-in-class adoption story: consistently top ease-of-use marks (Capterra ease 4.5), and non-technical teams genuinely self-serve."],
+        pricing_value: [3, "Pro at $19 is fair mid-market value, but meeting the hard portfolio requirement means custom-priced Enterprise (~$24–30+/seat reported, unverified, often with 50+ seat expectations), plus seat-bucket rounding."],
+        admin: [3, "Unlimited free viewers on all paid tiers and unlimited guests on Pro are excellent; but SAML SSO, audit log, advanced permissions and HIPAA all sit in Enterprise."]
+      },
+      price: { perUser: 19, tierNote: "Pro (DIY roll-up), annual", round: "monday", note: "True Portfolio solution = Enterprise, custom quote (~$24–30 est., unverified)" },
+      ratings: "G2 4.7 · Capterra 4.6",
+      profile: {
+        what: "The most-awarded work OS of the nine — Gartner Leader four consecutive years, top pick at TechRadar and Forbes Advisor — and the easiest to adopt. The catch for this buyer: its real portfolio layer is enterprise-gated.",
+        portfolio: "The Portfolio solution (Enterprise only): portfolio boards connecting project boards, Portfolio Health Snapshot (on-track/at-risk/off-track roll-up), AI-generated daily Portfolio Risk Insights, an All Projects Dashboard consolidating up to 200 project boards, cross-project dependencies, and a resource planner. On Pro you approximate with multi-board dashboards (≤20 boards) and the Gantt widget — but standalone Pro projects cannot join a portfolio.",
+        m365: "Native Teams app embeds boards as working tabs (views, filters and automations run inside Teams) plus a bot and link unfurling; an M365 Copilot app exists. Two-way Outlook Calendar sync and email-to-item (Exchange Online only). OneDrive file attach reaches SharePoint libraries via the file picker, but there is no SharePoint list/site connector, no certified Power Automate connector, and no native Power BI connector (third-party paid apps fill both gaps).",
+        pricing: "Free (2 seats) · Basic $9 · Standard $12 (Gantt arrives here) · Pro $19 (DIY portfolio roll-up, unlimited guests) · Enterprise custom unlocks the Portfolio solution + SAML SSO. Seats sell in buckets (3/5/10/15/20/25/30/40/50) — a 26-seat team pays for 30. 25 users on Pro = $475/mo.",
+        watch: ["The hard portfolio requirement forces a custom-priced Enterprise negotiation — reported ~$24–30+/seat and often 50+ seat expectations (unverified).", "Automation/integration actions are metered per month per tier.", "SAML SSO and audit logs are Enterprise-only."]
+      }
+    },
+    {
+      id: "clickup", name: "ClickUp", tier: "Business",
+      scores: {
+        portfolio: [3, "Portfolios are dashboard “portfolio cards” rolling up Folders/Lists, plus Goals and an Everything-level Gantt across projects — but there is no true program object, no project-to-project dependencies, and roll-ups are assembled by hand."],
+        m365: [2, "Weakest M365 story benchmarked alongside Airtable: the Teams app does channel notifications, task creation from messages and link unfurling, but cannot embed ClickUp views as Teams tabs (a 5+ year-old open request), and there is no official Power Automate or Power BI connector."],
+        ops_fit: [5, "Purpose-built general work management: custom statuses/fields/workflows, Form view, Docs, Whiteboards, Chat and a very large template library — the most all-in-one of the nine."],
+        reporting: [4, "Unlimited dashboards with 50+ card types on Business; strong team-level reporting, but no BI-grade analytics and no official Power BI path; heavy dashboards can be slow."],
+        ease: [3, "Consistently described as having a steep initial learning curve from feature overload and deep configurability; the modern UI helps once configured."],
+        pricing_value: [5, "Business at $12 is roughly half of Smartsheet and a quarter of Wrike with almost everything included and no seat minimums — $300/mo at 25 users."],
+        admin: [3, "Generous permission-controlled guest seats and 2FA, but SAML/Microsoft/Okta SSO, audit logs and custom roles are Enterprise-only (Business gets Google SSO only)."]
+      },
+      price: { perUser: 12, tierNote: "Business, annual", round: "exact", note: "No official Power Automate / Power BI connectors; SSO (SAML) needs Enterprise" },
+      ratings: "G2 4.7 · Capterra 4.6",
+      profile: {
+        what: "The value/feature-density pick — Forbes Advisor calls it the best choice for most SMBs. Everything-in-one-app philosophy: tasks, docs, whiteboards, chat, goals.",
+        portfolio: "Portfolio cards inside Dashboards roll up progress across chosen Folders/Lists; Goals (+ Goal Folders on Business) aggregate tasks with percent progress; the Gantt view can span Lists, Folders and Spaces with task dependencies and milestones. Limits: the portfolio is a dashboard construct, not an object — no project-level dependency management, no native project health/RAG field, no portfolio-level resource or financial governance.",
+        m365: "Teams app pushes activity into channels, creates tasks from messages, unfurls links — but cannot pin ClickUp views as Teams tabs (1,000+ vote request open 5+ years) and has no personal-DM notifications. Outlook add-in: tasks from email. SharePoint: search-level integration only. No official Power Automate or Power BI connector (API/Zapier/paid third-party only) — the biggest miss against the M365 requirement.",
+        pricing: "Free Forever (100-use caps on key views) · Unlimited $7 · Business $12 is the realistic portfolio tier (unlimited Timeline, Goal Folders, Workload, dashboards) · Business Plus $19 (semi-hidden) · Enterprise custom for SAML SSO/audit. AI add-ons $9–28/user extra. 25 users on Business = $300/mo.",
+        watch: ["Teams-tab embedding and Power BI connectivity are long-open feature requests — do not count on them landing.", "Business automation quota reported inconsistently across sources (5,000–10,000/mo, unverified).", "Custom roles hide on the semi-advertised Business Plus tier."]
+      }
+    },
+    {
+      id: "jira", name: "Jira", tier: "Premium",
+      scores: {
+        portfolio: [4, "Plans (formerly Advanced Roadmaps) on Premium is genuinely powerful: cross-project Gantt, cross-project dependency mapping, capacity planning, and what-if scenario sandboxing. Docked: portfolio dashboards are gadget-based and dated, and goals roll-up lives in separate Atlassian Home/Focus surfaces."],
+        m365: [3, "Solid official Teams app and Outlook add-in plus a Microsoft-listed Power Automate connector, but no native SharePoint or Power BI connector — both need Power Automate flows, API work, or paid marketplace apps. Teams notifications are one-directional."],
+        ops_fit: [3, "Since the Jira Work Management merger, Jira ships business templates, forms and list/calendar views — friendlier to non-dev teams than before — but the underlying issue/workflow-scheme model remains engineered for software teams and feels heavy for general ops."],
+        reporting: [3, "Strong built-in project reports and configurable dashboards, but they look dated, cross-project business reporting is clunky, and Atlassian Analytics is Enterprise-only."],
+        ease: [2, "Lowest ease-of-use ratings of the nine (Capterra ease 4.1); real admin/config learning curve, and Plans itself takes training to use well."],
+        pricing_value: [4, "The cheapest self-serve path to true cross-project portfolio planning: Premium ≈ $14.54/user → ~$364/mo at 25 users. Docked: SAML SSO costs extra (Atlassian Guard) and adoption effort eats some savings."],
+        admin: [3, "Granular permission schemes, audit logs and sandbox on Premium, but SAML SSO/SCIM is a paid add-on (Atlassian Guard, ~$4.20/user), and there is no free guest role — external collaborators consume paid licenses."]
+      },
+      price: { perUser: 14.54, tierNote: "Premium, annual", round: "exact", note: "+ Atlassian Guard ~$4.20/user for SAML SSO; no free guest role" },
+      ratings: "G2 4.3 · Capterra 4.4",
+      profile: {
+        what: "The benchmark baseline. Since 2024, Jira Work Management has merged into a single Jira with “Business” and “Software” project types, so ops teams get business templates and views without a separate SKU — but the DNA is still software delivery.",
+        portfolio: "“Plans” (Premium+): combine issue sources from unlimited projects into one cross-project roadmap; hierarchy above epics (initiatives/themes); cross-project dependency visualization; team capacity planning; auto-scheduling; what-if scenario sandbox that doesn't touch live data until committed. Goals/OKR roll-up is not inside Plans (separate Atlassian Home/Focus surfaces).",
+        m365: "Official Teams app: project tabs, create/update/transition work items from chat, channel notifications, actionable link cards; Rovo AI drafts work items from Teams messages (one-directional Jira → Teams). Outlook add-in: issues from email. Microsoft-listed Power Automate connector exists. No native SharePoint or Power BI connector — plan on flows, API work, or paid marketplace apps.",
+        pricing: "Free (≤10 users) · Standard $7.91 · Premium $14.54 unlocks Plans · Enterprise custom (~800+ users). No seat buckets. SAML SSO = Atlassian Guard add-on ~$4.20/user across all Atlassian users. 25 users on Premium = $363.50/mo (+~$105 Guard if SSO needed).",
+        watch: ["Ease-of-use is the weakest of the nine for non-technical staff — budget onboarding time.", "External collaborators consume paid licenses (no guest role).", "Plan-level issue limits (~5,000/plan default) unverified against current docs."]
+      }
+    },
+    {
+      id: "airtable", name: "Airtable", tier: "Team*",
+      scores: {
+        portfolio: [3, "No named portfolio feature — you build one: Projects↔Tasks linked tables, rollup fields, a Gantt view with drag-and-drop dependencies and auto-cascading reschedules, and Interface Designer dashboards. Powerful but entirely DIY, and hard to run across multiple bases."],
+        m365: [2, "Weakest M365 integration benchmarked: no native Teams tab app (generic website-tab embed only), Teams/Outlook exist as automation actions, the Power Automate connector is deprecated per Microsoft Learn, and there is no Power BI connector."],
+        ops_fit: [5, "Best-in-class flexible ops platform: custom tables and fields, forms, AI-capable automations, interfaces and portals, hundreds of templates — it can model workflows no PM tool can."],
+        reporting: [4, "Interface Designer dashboards are strong and end-user buildable; there is no cross-workspace BI layer, and heavy reporting pushes you to external BI over the API."],
+        ease: [3, "The UI is intuitive, but someone must architect the whole portfolio system — schema, links, rollups, interfaces — which is real, ongoing effort compared to out-of-box PM tools."],
+        pricing_value: [3, "Team at $20 is fair, but the governance features an M365 org needs (SAML SSO, admin panel) sit at Business — $45/user, the priciest realistic option benchmarked."],
+        admin: [4, "Business adds SAML SSO and an admin panel; Enterprise Scale adds SCIM, audit logs, DLP and enterprise key management. Read-only collaborators and form submitters are free."]
+      },
+      price: { perUser: 20, tierNote: "Team, annual", round: "exact", note: "SSO/governance needs Business at $45/user; portfolio is DIY" },
+      ratings: "G2 4.6 · Capterra 4.6",
+      profile: {
+        what: "A relational-database ops platform, not a turnkey PM tool — the highest user-satisfaction scores of the nine, for a different job. Consider it if the team's real need is custom operational tooling with some project tracking, not program management.",
+        portfolio: "No named feature. The standard pattern: one base with Projects and Tasks linked tables, rollup/formula fields for progress, Gantt view (milestones, dependencies with auto-cascade rescheduling, critical path), Timeline view, and Interface Designer portfolio dashboards. Works best inside a single base; cross-base roll-ups need synced tables (Business+). No program hierarchy, goals module, or resource-capacity engine — all hand-modeled.",
+        m365: "The gap: no first-party Teams tab app (embed a share link via the generic Website tab); official integration is an OAuth “Send Teams message” automation action requiring Entra admin consent. Outlook: send-email and calendar-event automation actions plus a one-way Outlook Calendar sync. OneDrive file picker for attachments; no SharePoint integration. The Power Automate connector is flagged deprecated on Microsoft Learn; no Power BI connector — API or third-party drivers only.",
+        pricing: "Free (5 editors, no Gantt) · Team $20 (Gantt, dependencies — the minimum DIY-portfolio tier) · Business $45 (SAML SSO, admin panel, two-way sync) · Enterprise Scale custom. Every editor is a paid seat; read-only users free. 25 users: $500/mo Team, $1,125/mo Business.",
+        watch: ["Meeting both must-haves is a stretch: the portfolio is self-built and the M365 integration is automation-plumbing, not embedded experience.", "Record caps per base bound very large portfolios.", "Deprecated Power Automate connector means automation runs on the API or middleware."]
+      }
+    }
+  ];
+
+  var fmtUSD = function (n) {
+    return "$" + Math.round(n).toLocaleString("en-US");
+  };
+  var fmtRate = function (n) {
+    return n % 1 === 0 ? "$" + n : "$" + n.toFixed(2);
+  };
+
+  /* ---------- weighted ranking ---------- */
+  var weights = {};
+  CRITERIA.forEach(function (c) { weights[c.key] = c.def; });
+
+  function weightedScore(tool) {
+    var num = 0, den = 0;
+    CRITERIA.forEach(function (c) {
+      num += tool.scores[c.key][0] * weights[c.key];
+      den += weights[c.key];
+    });
+    return den === 0 ? 0 : num / den;
+  }
+
+  var weightRows = document.getElementById("weight-rows");
+  CRITERIA.forEach(function (c) {
+    var row = document.createElement("div");
+    row.className = "wrow";
+    var lab = document.createElement("label");
+    lab.setAttribute("for", "w-" + c.key);
+    lab.innerHTML = "<span>" + c.full + "</span><span class='pct' id='wp-" + c.key + "'></span>";
+    var inp = document.createElement("input");
+    inp.type = "range"; inp.min = "0"; inp.max = "40"; inp.step = "1";
+    inp.value = String(c.def); inp.id = "w-" + c.key;
+    inp.setAttribute("aria-label", "Weight for " + c.full);
+    inp.addEventListener("input", function () {
+      weights[c.key] = Number(inp.value);
+      renderWeights(); renderRanking();
+    });
+    row.appendChild(lab); row.appendChild(inp);
+    weightRows.appendChild(row);
+  });
+
+  function renderWeights() {
+    var total = 0;
+    CRITERIA.forEach(function (c) { total += weights[c.key]; });
+    CRITERIA.forEach(function (c) {
+      var pct = total === 0 ? 0 : Math.round((weights[c.key] / total) * 100);
+      document.getElementById("wp-" + c.key).textContent = pct + "%";
+    });
+  }
+
+  document.getElementById("reset-weights").addEventListener("click", function () {
+    CRITERIA.forEach(function (c) {
+      weights[c.key] = c.def;
+      document.getElementById("w-" + c.key).value = String(c.def);
+    });
+    renderWeights(); renderRanking();
+  });
+
+  var rankBars = document.getElementById("rank-bars");
+  function renderRanking() {
+    var ranked = TOOLS.map(function (t) {
+      return { t: t, s: weightedScore(t) };
+    }).sort(function (a, b) { return b.s - a.s; });
+
+    rankBars.innerHTML = "";
+    ranked.forEach(function (r, i) {
+      var row = document.createElement("div");
+      row.className = "rbar-row" + (i === 0 ? " top" : "");
+      var pct = (r.s / 5) * 100;
+      row.innerHTML =
+        "<span class='rname'>" + r.t.name + "</span>" +
+        "<span class='rtrack'><span class='rfill' style='width:" + pct.toFixed(1) + "%'></span></span>" +
+        "<span class='rval'>" + r.s.toFixed(2) + "</span>";
+      rankBars.appendChild(row);
+    });
+    renderScoreTable(currentSort);
+  }
+
+  /* ---------- scorecard ---------- */
+  var table = document.getElementById("score-table");
+  var detail = document.getElementById("cell-detail");
+  var currentSort = null; // null = weighted order
+  var selectedCell = null;
+
+  function renderScoreTable(sortKey) {
+    currentSort = sortKey;
+    var rows = TOOLS.map(function (t) { return { t: t, w: weightedScore(t) }; });
+    if (sortKey) {
+      rows.sort(function (a, b) { return b.t.scores[sortKey][0] - a.t.scores[sortKey][0] || b.w - a.w; });
+    } else {
+      rows.sort(function (a, b) { return b.w - a.w; });
+    }
+
+    var thead = "<thead><tr><th class='tool' data-k=''>Tool" + (sortKey ? "" : " <span class='arrow'>▼</span>") + "</th>";
+    CRITERIA.forEach(function (c) {
+      thead += "<th data-k='" + c.key + "' title='" + c.desc.replace(/'/g, "&#39;") + "'>" + c.label +
+        (sortKey === c.key ? " <span class='arrow'>▼</span>" : "") + "</th>";
+    });
+    thead += "<th data-k=''>Weighted</th></tr></thead>";
+
+    var tbody = "<tbody>";
+    rows.forEach(function (r) {
+      tbody += "<tr><td class='tool'>" + r.t.name + "<span class='tier-chip'>" + r.t.tier + " tier</span></td>";
+      CRITERIA.forEach(function (c) {
+        var v = r.t.scores[c.key][0];
+        var cls = "c" + Math.round(v);
+        var label = v % 1 === 0 ? String(v) : v.toFixed(1);
+        tbody += "<td><button type='button' class='chip " + cls + "' data-tool='" + r.t.id + "' data-crit='" + c.key + "' aria-label='" +
+          r.t.name + ", " + c.full + ": " + label + " out of 5. Activate for justification.'>" + label + "</button></td>";
+      });
+      tbody += "<td class='wtot'>" + r.w.toFixed(2) + "</td></tr>";
+    });
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+
+    table.querySelectorAll("thead th").forEach(function (th) {
+      th.addEventListener("click", function () {
+        var k = th.getAttribute("data-k");
+        renderScoreTable(k || null);
+      });
+    });
+    table.querySelectorAll(".chip").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (selectedCell) selectedCell.classList.remove("sel");
+        selectedCell = btn;
+        btn.classList.add("sel");
+        var t = TOOLS.find(function (x) { return x.id === btn.getAttribute("data-tool"); });
+        var cKey = btn.getAttribute("data-crit");
+        var c = CRITERIA.find(function (x) { return x.key === cKey; });
+        var sc = t.scores[cKey];
+        detail.innerHTML = "<strong>" + t.name + " · " + c.full + " — " +
+          (sc[0] % 1 === 0 ? sc[0] : sc[0].toFixed(1)) + "/5.</strong> " + sc[1];
+      });
+    });
+  }
+
+  /* ---------- pricing ---------- */
+  function roundSeats(mode, s) {
+    switch (mode) {
+      case "asana":
+        if (s <= 5) return s;
+        if (s <= 30) return Math.ceil(s / 5) * 5;
+        return Math.ceil(s / 10) * 10;
+      case "wrike":
+        if (s <= 30) return Math.max(5, Math.ceil(s / 5) * 5);
+        return Math.ceil(s / 10) * 10;
+      case "monday": {
+        var buckets = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100];
+        for (var i = 0; i < buckets.length; i++) { if (buckets[i] >= s) return buckets[i]; }
+        return s;
+      }
+      case "min3": return Math.max(3, s);
+      default: return s;
+    }
+  }
+
+  function toolCost(t, seats, plannerMixed) {
+    if (t.id === "planner" && plannerMixed) {
+      var creators = Math.ceil(seats / 5);
+      return { cost: creators * 30 + (seats - creators) * 10, billed: seats, mixed: creators };
+    }
+    var billed = roundSeats(t.price.round, seats);
+    return { cost: billed * t.price.perUser, billed: billed };
+  }
+
+  var seatSlider = document.getElementById("seat-slider");
+  var seatCount = document.getElementById("seat-count");
+  var plannerMix = document.getElementById("planner-mix");
+  var priceBars = document.getElementById("price-bars");
+  var priceFoot = document.getElementById("price-footnotes");
+
+  function renderPricing() {
+    var seats = Number(seatSlider.value);
+    seatCount.textContent = String(seats);
+    var mixed = plannerMix.checked;
+
+    var rows = TOOLS.map(function (t) {
+      var r = toolCost(t, seats, mixed);
+      return { t: t, cost: r.cost, billed: r.billed, mixed: r.mixed };
+    }).sort(function (a, b) { return a.cost - b.cost; });
+
+    var max = rows[rows.length - 1].cost;
+    priceBars.innerHTML = "";
+    rows.forEach(function (r) {
+      var row = document.createElement("div");
+      row.className = "pbar-row";
+      var pct = max === 0 ? 0 : (r.cost / max) * 100;
+      var tierLine = r.t.id === "planner" && r.mixed
+        ? r.mixed + "× Plan 3 + " + (Number(seatSlider.value) - r.mixed) + "× Plan 1"
+        : r.t.price.tierNote + (r.billed !== Number(seatSlider.value) ? " · billed as " + r.billed + " seats" : "");
+      row.innerHTML =
+        "<span class='pname'><b>" + r.t.name + "</b><small>" + tierLine + "</small></span>" +
+        "<span class='ptrack'><span class='pfill' style='width:" + pct.toFixed(1) + "%'></span></span>" +
+        "<span class='pval'><b>" + fmtUSD(r.cost) + "</b>/mo<small>" + fmtUSD(r.cost * 12) + "/yr</small></span>";
+      priceBars.appendChild(row);
+    });
+
+    priceFoot.innerHTML = "Asterisked tiers in the scorecard (Monday Pro, Airtable Team) approximate the portfolio requirement — Monday’s full Portfolio solution is custom-priced Enterprise (~$24–30+/seat, unverified) and Airtable needs Business ($45/user) for SSO/governance. " +
+      "Jira adds ~$4.20/user for SAML SSO (Atlassian Guard). Smartsheet’s full program-governance engine (Control Center) is a custom-priced add-on. Wrike bills annually only. Basic Microsoft Planner (no Gantt/portfolios) is already included in Microsoft 365 at $0.";
+  }
+
+  seatSlider.addEventListener("input", renderPricing);
+  plannerMix.addEventListener("change", renderPricing);
+
+  /* ---------- profiles ---------- */
+  var profileList = document.getElementById("profile-list");
+  TOOLS.map(function (t) { return { t: t, w: weightedScore(t) }; })
+    .sort(function (a, b) { return b.w - a.w; })
+    .forEach(function (r) {
+      var t = r.t;
+      var d = document.createElement("details");
+      d.className = "profile";
+      var watch = t.profile.watch.map(function (w) { return "<li>" + w + "</li>"; }).join("");
+      d.innerHTML =
+        "<summary>" + t.name +
+        " <span class='sub'>" + t.tier.replace("*", "") + " tier · " + fmtRate(t.price.perUser) + "/user/mo</span>" +
+        "<span class='rating'>" + t.ratings + "</span></summary>" +
+        "<div class='pbody'>" +
+        "<h4>In one line</h4><p>" + t.profile.what + "</p>" +
+        "<h4>Portfolio layer</h4><p>" + t.profile.portfolio + "</p>" +
+        "<h4>Microsoft 365 &amp; Teams</h4><p>" + t.profile.m365 + "</p>" +
+        "<h4>Pricing</h4><p>" + t.profile.pricing + "</p>" +
+        "<h4>Watch out for</h4><ul>" + watch + "</ul>" +
+        "</div>";
+      profileList.appendChild(d);
+    });
+
+  renderWeights();
+  renderRanking();
+  renderPricing();
+})();
+</script>

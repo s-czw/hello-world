@@ -1,0 +1,250 @@
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.pageTitle {
+  font-size: var(--text-2xl);
+  line-height: var(--text-2xl-lh);
+  font-weight: var(--weight-semibold);
+}
+.pageSub {
+  font-size: var(--text-md);
+  color: var(--ink-secondary);
+}
+.panel {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+}
+.panelTitle {
+  font-size: var(--text-lg);
+  line-height: var(--text-lg-lh);
+  font-weight: var(--weight-semibold);
+}
+
+/* Generic table */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th {
+  text-align: left;
+  font-size: var(--text-xs);
+  line-height: var(--text-xs-lh);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  font-weight: var(--weight-medium);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+}
+.table td {
+  padding: 0 var(--space-5);
+  height: var(--row-height);
+  border-bottom: 1px solid var(--border-default);
+  font-size: var(--text-md);
+  vertical-align: middle;
+}
+.table tr:last-child td {
+  border-bottom: none;
+}
+.table tbody tr:hover {
+  background: var(--surface-hover);
+}
+.cellActions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.muted {
+  color: var(--ink-tertiary);
+}
+.emptyActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* My tasks groups */
+.groupTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-secondary);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-sunken);
+}
+.groupTitleOverdue {
+  color: var(--status-off-track-ink);
+}
+.taskRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) 0 var(--space-4);
+  height: var(--row-height);
+  border-bottom: 1px solid var(--border-default);
+}
+.taskRow:hover {
+  background: var(--surface-hover);
+}
+.taskNameBtn {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--ink-primary);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+}
+.taskNameBtn:hover {
+  text-decoration: underline;
+}
+.myPriority {
+  flex-shrink: 0;
+}
+.projectPill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+.projectDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  background: var(--gray-400);
+}
+.taskDue {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  color: var(--ink-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.taskDueOverdue {
+  color: var(--status-off-track-ink);
+}
+
+/* Members-specific */
+.rolePill {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+}
+.inactiveTag {
+  font-size: var(--text-sm);
+  color: var(--ink-tertiary);
+}
+.copyRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tokenLink {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+.inviteForm {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+}
+.inviteForm > :first-child {
+  flex: 1;
+}
+
+/* ── New project modal form ─────────────────────────────────────────── */
+.newProjectForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.formError {
+  background: var(--status-off-track-bg);
+  color: var(--status-off-track-ink);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.fieldLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+}
+.swatchRow {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.swatch[data-selected="true"] {
+  border-color: var(--ink-primary);
+}
+.newProjectDates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.newProjectFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}

@@ -1,0 +1,62 @@
+.screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: var(--surface-page);
+}
+.card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-7);
+}
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+.brandMark {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+}
+.brandName {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+.title {
+  font-size: var(--text-2xl);
+  line-height: var(--text-2xl-lh);
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-1);
+}
+.subtitle {
+  font-size: var(--text-md);
+  color: var(--ink-secondary);
+  margin-bottom: var(--space-6);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.formError {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--status-off-track-bg);
+  color: var(--status-off-track-ink);
+  font-size: var(--text-sm);
+}
+.footNote {
+  margin-top: var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--ink-tertiary);
+  text-align: center;
+}
