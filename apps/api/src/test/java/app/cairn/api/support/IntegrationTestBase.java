@@ -1,5 +1,7 @@
 package app.cairn.api.support;
 
+import app.cairn.api.auth.session.AuthCookies;
+import app.cairn.api.auth.session.CsrfTokenService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import java.util.regex.Matcher;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.flyway.FlywayMigrationStrategy;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcBuilderCustomizer;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -19,18 +22,30 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /**
  * Base for {@code @Tag("integration")} tests. Points the datasource at {@code TEST_JDBC_URL} (a real
  * Postgres, default {@code cairn_test}), disables the login rate limit for determinism, and gives each
  * test a pristine schema: Flyway {@code clean+migrate} once on context start, then a truncate before
  * every method. Uses the full Spring Security filter chain via {@link MockMvc}.
+ *
+ * <p><b>CSRF (arch §6.4):</b> the chain requires authenticated state-changing requests to echo the
+ * {@code cairn_csrf} cookie in the {@code X-CSRF-Token} header. {@link #csrfDoubleSubmit()} is applied
+ * to every MockMvc request so tests behave like the browser client does — it copies whatever
+ * {@code cairn_csrf} cookie the request already carries into the header, and never invents one. A test
+ * probing the guard itself opts out with {@code .requestAttr(SUPPRESS_CSRF_HEADER, true)} (send no
+ * header) or by setting the header to a wrong value explicitly.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Tag("integration")
 @Import(IntegrationTestBase.CleanMigrateConfig.class)
 public abstract class IntegrationTestBase {
+
+    /** Request attribute that stops the auto-echo post-processor from adding the CSRF header. */
+    public static final String SUPPRESS_CSRF_HEADER = "cairn.test.suppress-csrf-header";
 
     @Autowired protected MockMvc mockMvc;
     @Autowired protected ObjectMapper objectMapper;
@@ -90,9 +105,41 @@ public abstract class IntegrationTestBase {
         return cookie == null ? null : cookie.getValue();
     }
 
+    /**
+     * Mirrors the browser: copy the request's own {@code cairn_csrf} cookie into the
+     * {@code X-CSRF-Token} header. No cookie (or an opt-out attribute, or a header the test already
+     * set) → left untouched, so the guard can still be exercised.
+     */
+    public static RequestPostProcessor csrfDoubleSubmit() {
+        return request -> {
+            if (request.getAttribute(SUPPRESS_CSRF_HEADER) != null
+                    || request.getHeader(CsrfTokenService.HEADER) != null) {
+                return request;
+            }
+            Cookie[] cookies = request.getCookies();
+            if (cookies != null) {
+                for (Cookie cookie : cookies) {
+                    if (AuthCookies.CSRF.equals(cookie.getName())) {
+                        request.addHeader(CsrfTokenService.HEADER, cookie.getValue());
+                        break;
+                    }
+                }
+            }
+            return request;
+        };
+    }
+
     /** Provides a clean-then-migrate strategy so each context start yields a pristine schema. */
     @TestConfiguration
     static class CleanMigrateConfig {
+
+        /** Applies {@link #csrfDoubleSubmit()} to every MockMvc request in the integration lane. */
+        @Bean
+        MockMvcBuilderCustomizer csrfDoubleSubmitCustomizer() {
+            return builder -> builder.defaultRequest(
+                    MockMvcRequestBuilders.get("/").with(csrfDoubleSubmit()));
+        }
+
         @Bean
         FlywayMigrationStrategy cleanMigrateStrategy() {
             return flyway -> {

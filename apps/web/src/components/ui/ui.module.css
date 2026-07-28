@@ -195,8 +195,9 @@
   line-height: 1;
 }
 .statusChipTime {
+  /* No opacity here: fading the status ink over its own subtle fill drops the pair
+     below 4.5:1 (e.g. at-risk 5.37 -> 3.98). The lighter weight carries the hierarchy. */
   font-weight: var(--weight-regular);
-  opacity: 0.85;
 }
 .statusChipBtn {
   cursor: pointer;

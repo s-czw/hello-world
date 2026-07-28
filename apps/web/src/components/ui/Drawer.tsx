@@ -27,7 +27,10 @@ export function Drawer({
   ariaLabel = "Task detail",
   returnFocusRef,
 }: DrawerProps) {
-  const [render, setRender] = useState(open);
+  // Starts false even when `open` is already true (a `?task=` deep link): the
+  // portal target is `document.body`, which does not exist during SSR. The mount
+  // effect below promotes it on the client, exactly as an interactive open does.
+  const [render, setRender] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 

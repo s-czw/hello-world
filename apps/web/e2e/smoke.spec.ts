@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ADMIN } from "./support/accounts";
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
@@ -63,10 +64,10 @@ test("M1 happy path: bootstrap → project → tasks → my-tasks", async ({ pag
   // 1) Bootstrap (first-run)
   await test.step("bootstrap", async () => {
     await page.goto("/setup");
-    await page.getByLabel("Organization name").fill("Acme Ops");
-    await page.getByLabel("Your name").fill("Ada Admin");
-    await page.getByLabel("Email").fill(`ada${uniq}@example.com`);
-    await page.getByLabel("Password").fill("password123");
+    await page.getByLabel("Organization name").fill(ADMIN.org);
+    await page.getByLabel("Your name").fill(ADMIN.name);
+    await page.getByLabel("Email").fill(ADMIN.email);
+    await page.getByLabel("Password").fill(ADMIN.password);
     await page.getByRole("button", { name: "Create workspace" }).click();
     await page.waitForURL("**/my-tasks", { timeout: 15000 });
   });
@@ -75,6 +76,9 @@ test("M1 happy path: bootstrap → project → tasks → my-tasks", async ({ pag
   await test.step("create project", async () => {
     await page.goto("/projects/new");
     await page.getByLabel("Name").fill("Launch");
+    // The Team select is populated from GET /teams; submitting before it lands
+    // trips the form's own "A name and team are required" guard.
+    await expect(page.getByLabel("Team")).not.toHaveValue("");
     await page.getByRole("button", { name: "Create project" }).click();
     await page.waitForURL("**/projects/**/list", { timeout: 15000 });
     projectId = page.url().match(/projects\/([0-9a-f-]{36})/)?.[1] ?? "";
@@ -290,6 +294,18 @@ test("M1 happy path: bootstrap → project → tasks → my-tasks", async ({ pag
     expect(after, "In progress column grew after the cross-column drop").toBeGreaterThan(before);
   });
 
+  // 13b) Board card → side-peek. The card is a plain (draggable) container whose
+  //      focusable "Open {task}" button bubbles its activation up — clicking it,
+  //      or pressing Enter on it, must still open the same `?task=` peek.
+  await test.step("board: card opens the side-peek", async () => {
+    await page.getByRole("button", { name: "Open Write copy" }).click();
+    const cardPeek = page.getByRole("dialog", { name: "Task detail" });
+    await cardPeek.waitFor();
+    await expect(cardPeek.getByLabel("Task title")).toHaveValue("Write copy");
+    await page.keyboard.press("Escape");
+    await cardPeek.waitFor({ state: "hidden" });
+  });
+
   // ── M3: subtasks + comment @mention + attachment + notification ────────────
 
   const bobEmail = `bob${uniq}@example.com`;
@@ -297,8 +313,16 @@ test("M1 happy path: bootstrap → project → tasks → my-tasks", async ({ pag
 
   // 14) Seed a second org member (Bob) through the API — Ada is authenticated,
   //     so page.request carries her session cookies via the same-origin rewrite.
+  //     Authenticated writes must echo the cairn_csrf cookie (arch §6.4), which
+  //     the browser client does automatically but a raw request has to do itself.
   await test.step("seed a second member (invite + accept)", async () => {
-    const inv = await page.request.post("/api/v1/invites", { data: { email: bobEmail } });
+    const cookies = await page.context().cookies();
+    const csrf = cookies.find((c) => c.name === "cairn_csrf")?.value;
+    expect(csrf, "session issued a cairn_csrf cookie").toBeTruthy();
+    const inv = await page.request.post("/api/v1/invites", {
+      data: { email: bobEmail },
+      headers: { "X-CSRF-Token": csrf! },
+    });
     expect(inv.ok(), "invite created").toBeTruthy();
     const acceptUrl: string = (await inv.json()).data.acceptUrl;
     const token = new URL(acceptUrl, "http://placeholder").searchParams.get("token");

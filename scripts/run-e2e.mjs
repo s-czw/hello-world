@@ -61,6 +61,26 @@ function findJar() {
   return jars.length ? path.join(target, jars[0]) : null;
 }
 
+/**
+ * Fail fast if something is already listening on a port we are about to boot on.
+ *
+ * Without this, `waitFor` below happily reports "ready" for a FOREIGN server that happens to own the
+ * port, and the whole suite then runs against the wrong stack — e.g. a dev server left over from a
+ * previous session, or an already-bootstrapped database — producing confusing failures far from the
+ * cause. This has bitten twice, so it is a hard error rather than a warning.
+ */
+async function assertPortFree(name, port) {
+  try {
+    await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(1500) });
+  } catch {
+    return; // nothing answering — the port is ours to use
+  }
+  throw new Error(
+    `[e2e] port ${port} is already serving (${name}). Stop the process using it and re-run — ` +
+      `otherwise the tests would silently drive that server instead of a clean one.`,
+  );
+}
+
 async function waitFor(name, url, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -89,6 +109,10 @@ async function main() {
   run("node", [path.join(__dirname, "reset-db.mjs")], {
     env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL || "postgres://cairn:cairn@127.0.0.1:5432/cairn" },
   });
+
+  // 1b) preflight: both ports must be free, or we'd test someone else's server
+  await assertPortFree("API", API_PORT);
+  await assertPortFree("web", WEB_PORT);
 
   // 2) boot API
   const jar = findJar();

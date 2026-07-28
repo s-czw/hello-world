@@ -288,7 +288,9 @@ export default function MembersPage() {
               <tr>
                 <th>Email</th>
                 <th style={{ width: 160 }}>Expires</th>
-                <th style={{ width: 220 }} />
+                <th style={{ width: 220 }}>
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>

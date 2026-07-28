@@ -1,0 +1,53 @@
+# Cairn — DEVELOPMENT dependencies only.
+#
+#   docker compose up -d
+#
+# Brings up the two backing services the app needs while you run the api and the web dev server
+# on the host:
+#   cd apps/api && ./mvnw spring-boot:run
+#   pnpm --filter web dev
+#
+# The defaults match the api's application.yml defaults (cairn/cairn on 5432, Valkey on 6379), so
+# no extra environment is required. The production stack is docker-compose.prod.yml.
+
+name: cairn-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cairn-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cairn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cairn}
+      POSTGRES_DB: ${POSTGRES_DB:-cairn}
+      # No locale pinning needed: V4__sort_key_c_collation.sql declares COLLATE "C" on every
+      # fractional-ordering column, so ordering is identical under any database collation.
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cairn} -d ${POSTGRES_DB:-cairn}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  valkey:
+    # Valkey 8 (BSD-3) — never Redis >= 7.4 (RSALv2/SSPL), see D-021.
+    image: valkey/valkey:8-alpine
+    container_name: cairn-dev-valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  pgdata:

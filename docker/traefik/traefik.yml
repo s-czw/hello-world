@@ -1,0 +1,82 @@
+# Traefik v3 STATIC configuration (mounted read-only at /etc/traefik/traefik.yml).
+#
+# ── Read this before editing ────────────────────────────────────────────────────────────────
+# Traefik picks exactly ONE source for its static configuration — a config file, CLI flags, or
+# TRAEFIK_* environment variables — they are not merged. Because this file exists, it is the
+# source, and CLI flags / env vars on the container would be ignored. The file format also has
+# no ${VAR} interpolation, so the single deployment-specific value below (the ACME account
+# e-mail) must be written into this file. DEPLOY.md step 3 does that from ACME_EMAIL in
+# .env.prod with one `sed`. Everything else that varies per deployment (the domain, routers,
+# TLS termination per service) lives in Docker labels / the dynamic file, which DO interpolate.
+# ────────────────────────────────────────────────────────────────────────────────────────────
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+accessLog:
+  filters:
+    statusCodes:
+      - "400-599"
+
+# The dashboard and the Traefik API are deliberately OFF: nothing is exposed on 8080 and there is
+# no api@internal router anywhere in this stack.
+api:
+  dashboard: false
+  insecure: false
+
+# Container liveness only. The `ping` entrypoint below is never published to the host, so
+# /ping is reachable from inside the container (the HEALTHCHECK) and nowhere else.
+ping:
+  entryPoint: ping
+
+entryPoints:
+  ping:
+    address: ":8082"
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        # Defined in the dynamic file (docker/traefik/dynamic/middlewares.yml).
+        - secure-headers@file
+    transport:
+      respondingTimeouts:
+        # Generous enough for the 25 MB attachment upload cap.
+        readTimeout: 120s
+        writeTimeout: 120s
+        idleTimeout: 180s
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    # Only containers that opt in with `traefik.enable=true` are routed.
+    exposedByDefault: false
+    # Explicitly named in docker-compose.prod.yml so it is stable regardless of project name.
+    network: cairn_edge
+    watch: true
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      # >>> REPLACE with your ACME_EMAIL (see DEPLOY.md step 3). Let's Encrypt sends expiry
+      # >>> warnings here; registration fails on an unroutable address.
+      email: changeme@example.com
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web

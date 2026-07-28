@@ -39,7 +39,17 @@
 
   --ink-primary: #0f1722;
   --ink-secondary: #475569;
-  --ink-tertiary: #94a3b8;
+  /*
+   * §2.3 lists --ink-tertiary as #94A3B8 (= --gray-400), but that is only 2.56:1 on
+   * --surface-raised and 2.26:1 on --surface-sunken, which fails the SAME document's
+   * §6.1 rule ("all ink-on-surface pairs in §2.3 >= 4.5:1 (text)") and WCAG 2.2 AA
+   * 1.4.3 — axe flagged it as `serious` on every surface (M4 item C). Darkened to the
+   * nearest ramp step that clears 4.5:1 on every light surface it is used on
+   * (white 5.18 / page 4.87 / sunken 4.58 / selected 4.64) while keeping the 3-step
+   * ink hierarchy. The primitive --gray-400 is untouched. Logged as D-029; §2.3's hex
+   * now follows this value.
+   */
+  --ink-tertiary: #616e80;
   --ink-inverse: #ffffff;
 
   --accent: #4f46e5;
@@ -73,10 +83,19 @@
   --priority-medium: #4f46e5;
   --priority-low: #94a3b8;
 
-  /* Avatar identity palette (8 hues, all >= 4.5:1 with white initials) */
+  /*
+   * Avatar identity palette (8 hues, all >= 4.5:1 with white initials).
+   * §2.3 lists the third hue as #188A42, which is only 4.42:1 against white —
+   * axe caught it as `serious` on whichever member's id happens to hash to this
+   * slot (M4 item C). Darkened one step to #15803D (5.02:1) so the doc's own
+   * ">= 4.5:1 with white initials" promise actually holds for all eight. The
+   * identical hex on --status-on-track-bold is untouched: that one is a bar fill
+   * (graphic, 3:1) and already clears it. Logged as D-029.
+   * Measured vs #ffffff: 6.29 / 5.36 / 5.02 / 5.02 / 6.04 / 5.70 / 6.54 / 10.35.
+   */
   --avatar-0: #4f46e5;
   --avatar-1: #0e7490;
-  --avatar-2: #188a42;
+  --avatar-2: #15803d;
   --avatar-3: #b45309;
   --avatar-4: #be185d;
   --avatar-5: #7c3aed;

@@ -1,0 +1,73 @@
+#
+# Cairn API — Java 21 / Spring Boot, built from the monorepo root as build context:
+#   docker build -f docker/Dockerfile.api -t cairn-api .
+#
+# Stage 1 resolves Maven dependencies from the POM alone (so a source-only change reuses that
+# layer), then builds the fat jar. jOOQ codegen runs from the Flyway DDL scripts (DDLDatabase) —
+# no database is needed at build time.
+# Stage 2 runs a *layered* extraction of the Spring Boot jar on an eclipse-temurin JRE, so the
+# rarely-changing dependency layer is cached separately from the application classes.
+
+# ---------------------------------------------------------------------------
+# Stage 1 — build
+# ---------------------------------------------------------------------------
+# maven:3.9-*: same Maven 3.9.x line the committed wrapper pins (apps/api/.mvn/wrapper).
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /build
+
+# Dependency warm-up layer. Best-effort: `dependency:go-offline` cannot always resolve every
+# build-plugin extension (jooq-meta-extensions), so failures are tolerated here — the package
+# step below fetches whatever is still missing. Invalidated only when the POM changes.
+COPY apps/api/pom.xml ./pom.xml
+RUN mvn -B -q dependency:go-offline -DskipTests || true
+
+COPY apps/api/src ./src
+# Tests are covered by CI (`./mvnw verify` + the integration lane); the image build stays hermetic
+# and DB-free.
+RUN mvn -B -DskipTests package
+
+# Layer the jar. Spring Boot 3.4's `jarmode=tools` writes one directory per layer; each directory
+# holds paths relative to the application root, so overlaying them all yields app.jar + lib/.
+# The glob matches exactly one file today (cairn-api-0.0.1-SNAPSHOT.jar; the Maven-packaged
+# *.jar.original is not matched) and survives a version bump in apps/api/pom.xml.
+RUN cp target/cairn-api-*.jar ./app.jar \
+ && java -Djarmode=tools -jar app.jar extract --layers --destination layers \
+ && mkdir -p layers/dependencies layers/spring-boot-loader layers/snapshot-dependencies layers/application
+
+# ---------------------------------------------------------------------------
+# Stage 2 — runtime
+# ---------------------------------------------------------------------------
+FROM eclipse-temurin:21-jre AS runtime
+
+# curl is only for the HEALTHCHECK below (the JRE image ships neither curl nor wget).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# Non-root runtime user. /data is the attachment volume mount point (CAIRN_STORAGE_DIR).
+RUN groupadd --system --gid 1001 cairn \
+ && useradd --system --uid 1001 --gid cairn --home-dir /app --shell /usr/sbin/nologin cairn \
+ && mkdir -p /app /data/attachments \
+ && chown -R cairn:cairn /app /data
+
+WORKDIR /app
+
+# Ordered least- to most-frequently-changed for layer reuse.
+COPY --from=build --chown=cairn:cairn /build/layers/dependencies/ ./
+COPY --from=build --chown=cairn:cairn /build/layers/spring-boot-loader/ ./
+COPY --from=build --chown=cairn:cairn /build/layers/snapshot-dependencies/ ./
+COPY --from=build --chown=cairn:cairn /build/layers/application/ ./
+
+USER cairn
+
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+UseSerialGC" \
+    SERVER_PORT=8080 \
+    CAIRN_STORAGE_DIR=/data/attachments
+
+EXPOSE 8080
+
+# /readyz pings the datasource, so an unhealthy DB marks the container unhealthy too.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+  CMD curl -fsS "http://127.0.0.1:${SERVER_PORT}/readyz" || exit 1
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

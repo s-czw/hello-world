@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { components } from "@cairn/api-client";
+import { csrfHeaders, type components } from "@cairn/api-client";
 import { api, problemMessage } from "./api";
 import { useToast } from "@/components/ui/Toast";
 import { reorderForMove, tasksKey, type Task, type TaskPatch } from "./tasks";
@@ -407,6 +407,7 @@ export function useTaskDetailMutations(projectId: string) {
       const res = await fetch(`/api/v1/tasks/${taskId}/attachments`, {
         method: "POST",
         credentials: "include",
+        headers: csrfHeaders(),
         body: form,
       });
       if (!res.ok) {
@@ -441,6 +442,7 @@ export function useTaskDetailMutations(projectId: string) {
       const res = await fetch(`/api/v1/attachments/${attachmentId}`, {
         method: "DELETE",
         credentials: "include",
+        headers: csrfHeaders(),
       });
       if (!res.ok && res.status !== 204) throw new Error("Delete failed.");
       return attachmentId;

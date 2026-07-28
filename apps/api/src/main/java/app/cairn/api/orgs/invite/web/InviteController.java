@@ -2,10 +2,12 @@ package app.cairn.api.orgs.invite.web;
 
 import app.cairn.api.auth.AuthPrincipal;
 import app.cairn.api.auth.CurrentUser;
+import app.cairn.api.auth.session.CsrfTokenService;
 import app.cairn.api.core.web.ApiResponse;
 import app.cairn.api.core.web.Cursor;
 import app.cairn.api.orgs.invite.InviteRow;
 import app.cairn.api.orgs.invite.InviteService;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -30,10 +32,13 @@ public class InviteController {
 
     private final InviteService inviteService;
     private final CurrentUser currentUser;
+    private final CsrfTokenService csrfTokenService;
 
-    public InviteController(InviteService inviteService, CurrentUser currentUser) {
+    public InviteController(
+            InviteService inviteService, CurrentUser currentUser, CsrfTokenService csrfTokenService) {
         this.inviteService = inviteService;
         this.currentUser = currentUser;
+        this.csrfTokenService = csrfTokenService;
     }
 
     @PostMapping
@@ -69,9 +74,13 @@ public class InviteController {
 
     @PostMapping("/accept")
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<AcceptedInviteResponse> accept(@Valid @RequestBody AcceptInviteRequest req) {
+    public ApiResponse<AcceptedInviteResponse> accept(
+            @Valid @RequestBody AcceptInviteRequest req, HttpServletResponse response) {
         InviteService.AcceptedInvite accepted =
                 inviteService.accept(req.token(), req.name(), req.password());
+        // Accepting does not log the invitee in, but it does hand them a browser session's worth of
+        // state — plant a double-submit token so the page that follows starts with one (arch §6.4).
+        csrfTokenService.issueTo(response);
         return ApiResponse.of(AcceptedInviteResponse.from(accepted));
     }
 }

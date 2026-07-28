@@ -43,6 +43,17 @@ a:hover {
   text-decoration: underline;
 }
 
+/*
+ * Auto-linked URLs and @mentions inside plain-text blocks (descriptions, comments,
+ * status bodies). WCAG 1.4.1 / axe `link-in-text-block`: a link sitting in running
+ * text cannot be signalled by colour alone — accent vs --ink-secondary is only
+ * 1.2:1 — so these always carry an underline.
+ */
+.autolink {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* Universal focus-visible ring — docs/03 §6.2 */
 :focus-visible {
   outline: 2px solid var(--focus-ring);

@@ -76,7 +76,7 @@ Light values are the MVP source of truth; dark values are the deferred reference
 | `--border-strong` | `#CBD4E0` | `#3A4A63` | Inputs, focused containers |
 | `--ink-primary` | `#0F1722` | `#F1F5FA` | Titles, task names |
 | `--ink-secondary` | `#475569` | `#A9B7C9` | Metadata, labels |
-| `--ink-tertiary` | `#94A3B8` | `#6B7A90` | Placeholders, timestamps |
+| `--ink-tertiary` | `#616E80` | `#6B7A90` | Placeholders, timestamps |
 | `--ink-inverse` | `#FFFFFF` | `#0F1722` | Text on accent/status fills |
 | `--accent` | `#4F46E5` | `#818CF8` | Primary buttons, links, focus, active states |
 | `--accent-hover` | `#4338CA` | `#A5B4FC` | |
@@ -97,7 +97,13 @@ On hold is purple, not red — off-track (red) means "trajectory is bad," on hol
 
 **Priority** — task-level, spec enum **`none / low / medium / high`** (PD-19; no "Urgent"). Rendered as a small flag icon + label: High `#D97706`, Medium `#4F46E5`, Low `#94A3B8`, None = no flag rendered. Always icon + label, never a bare colored dot. **Effort note (PD-14a):** until spec v1.1 resolves sort-by-priority, priority is set-and-display only — we spend no further design effort on it (no chips beyond the flag, no keyboard shortcut, no filter affordances).
 
-Avatar identity palette (deterministic hash of user id, 8 hues, all ≥ 4.5:1 with white initials): `#4F46E5 #0E7490 #188A42 #B45309 #BE185D #7C3AED #B42328 #334155`. **Initials only in MVP** (PD-34) — no image avatars, no upload flow.
+Avatar identity palette (deterministic hash of user id, 8 hues, all ≥ 4.5:1 with white initials): `#4F46E5 #0E7490 #15803D #B45309 #BE185D #7C3AED #B42328 #334155`. **Initials only in MVP** (PD-34) — no image avatars, no upload flow.
+
+> **Contrast corrections (D-029, M4).** Two light-theme values above were changed from the v1 draft
+> after the automated axe scan: `--ink-tertiary` `#94A3B8` → `#616E80` and avatar hue 3 `#188A42` →
+> `#15803D`. Both originals failed the ≥ 4.5:1 promise made by §6.1 and by this section's own
+> parenthetical. The primitive `--gray-400` (`#94A3B8`), the On-track **bold** bar fill (`#188A42`,
+> a graphic at 3:1) and the dark-theme column are unchanged.
 
 ### 2.4 Typography
 

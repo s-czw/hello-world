@@ -13,10 +13,12 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * The multi-provider security chain (D-020). Stateless (JWT cookie, no server session), CSRF disabled
- * (cookies are SameSite=Lax and there is no browser form-post surface in M1). Permits first-run,
- * login, refresh, invite-accept, health, and API docs; everything else requires a valid access cookie.
- * Auth failures render as RFC 9457 problem+json (401/403).
+ * The multi-provider security chain (D-020). Stateless (JWT cookie, no server session). Spring's own
+ * CSRF machinery stays off — it is session/token-repository shaped — and is replaced by the stateless
+ * double-submit check in {@link CsrfDoubleSubmitFilter} (arch §6.4), layered on top of the
+ * {@code SameSite=Lax} session cookies. Permits first-run, login, refresh, invite-accept, health, and
+ * API docs; everything else requires a valid access cookie. Auth failures render as RFC 9457
+ * problem+json (401/403).
  */
 @Configuration
 @EnableWebSecurity
@@ -26,6 +28,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(
             HttpSecurity http,
             JwtCookieAuthFilter jwtCookieAuthFilter,
+            CsrfDoubleSubmitFilter csrfDoubleSubmitFilter,
             AuthenticationEntryPoint authenticationEntryPoint,
             AccessDeniedHandler accessDeniedHandler)
             throws Exception {
@@ -49,7 +52,10 @@ public class SecurityConfig {
                         .authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
-                .addFilterBefore(jwtCookieAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtCookieAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                // Runs straight after authentication so the double-submit check can tell an
+                // authenticated mutation (403 on a bad token) from an anonymous one (401).
+                .addFilterAfter(csrfDoubleSubmitFilter, JwtCookieAuthFilter.class);
         return http.build();
     }
 

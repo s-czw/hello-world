@@ -61,7 +61,13 @@ export function renderCommentBody(text: string, users: User[] = []): React.React
         }
         const href = url.startsWith("www.") ? `https://${url}` : url;
         out.push(
-          <a key={`a-${key}-${start}`} href={href} target="_blank" rel="noopener noreferrer">
+          <a
+            key={`a-${key}-${start}`}
+            className="autolink"
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {url}
           </a>,
         );

@@ -91,7 +91,17 @@
   flex-shrink: 0;
   margin-top: 1px;
 }
+/* Rendered as a <button> on live cards (the focusable "Open {task}" control) and a
+   <span> inside the drag overlay — both must look like plain card text. */
 .cardName {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
   color: var(--ink-primary);

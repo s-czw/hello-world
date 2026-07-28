@@ -1,0 +1,76 @@
+#
+# Cairn web — Next.js 15 (App Router), built from the monorepo root as build context:
+#   docker build -f docker/Dockerfile.web --build-arg API_ORIGIN=http://api:8080 -t cairn-web .
+#
+# IMPORTANT — API_ORIGIN is a *build-time* value. Next inlines `process.env.API_ORIGIN` into the
+# edge middleware bundle and bakes the `/api/:path*` rewrite destination into the standalone
+# server config, so it cannot be changed by setting an env var on the running container. In the
+# production compose stack Traefik routes /api straight to the api service, so the rewrite is a
+# fallback; the middleware's server-side bootstrap-status fetch is what actually uses it.
+
+# ---------------------------------------------------------------------------
+# Stage 1 — workspace dependencies (cached on the manifests + lockfile only)
+# ---------------------------------------------------------------------------
+FROM node:22-alpine AS deps
+RUN apk add --no-cache libc6-compat && corepack enable
+WORKDIR /repo
+
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    NEXT_TELEMETRY_DISABLED=1
+
+# Only the pnpm workspace manifests — apps/api has no package.json (it is the Maven module).
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/api-client/package.json ./packages/api-client/package.json
+RUN pnpm install --frozen-lockfile
+
+# ---------------------------------------------------------------------------
+# Stage 2 — build (api-client first: `web` depends on it via workspace:*)
+# ---------------------------------------------------------------------------
+FROM deps AS build
+WORKDIR /repo
+
+ARG API_ORIGIN=http://api:8080
+ENV API_ORIGIN=${API_ORIGIN} \
+    NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1
+
+COPY . .
+RUN pnpm --filter @cairn/api-client build \
+ && pnpm --filter web build
+
+# ---------------------------------------------------------------------------
+# Stage 3 — runtime (Next.js standalone output)
+# ---------------------------------------------------------------------------
+FROM node:22-alpine AS runtime
+RUN apk add --no-cache libc6-compat
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+# Non-root runtime user (the base image's `node` user is uid 1000; 1001 keeps api/web aligned).
+# busybox short options only — long flags are not portable across busybox builds.
+RUN addgroup -S -g 1001 cairn \
+ && adduser -S -u 1001 -G cairn -h /app -s /sbin/nologin cairn
+WORKDIR /app
+
+# `output: "standalone"` with outputFileTracingRoot=<monorepo root> emits:
+#   .next/standalone/apps/web/server.js   (the server entrypoint)
+#   .next/standalone/apps/web/node_modules -> symlinks into
+#   .next/standalone/node_modules/.pnpm   (the traced, pruned dependency tree)
+# Static assets are NOT included by the tracer and must be copied alongside.
+COPY --from=build --chown=cairn:cairn /repo/apps/web/.next/standalone/ ./
+COPY --from=build --chown=cairn:cairn /repo/apps/web/.next/static/ ./apps/web/.next/static/
+# (apps/web/public holds no files today; add a COPY here if that changes.)
+
+USER cairn
+EXPOSE 3000
+
+# /icon.svg is a static route and is excluded from the middleware matcher (it contains a dot),
+# so the check never depends on the API being up. busybox wget ships with the alpine base.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -q --spider "http://127.0.0.1:${PORT}/icon.svg" || exit 1
+
+CMD ["node", "apps/web/server.js"]

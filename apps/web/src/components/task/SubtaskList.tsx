@@ -55,7 +55,13 @@ export function SubtaskList({
       <div className={styles.blockHead}>
         <div className={styles.peekSectionTitle}>Subtasks</div>
         {progress.total > 0 && (
-          <span className={styles.subProgress} aria-label={`${progress.completed} of ${progress.total} complete`}>
+          <span
+            className={styles.subProgress}
+            // role="img" so the "n/m" shorthand is announced in full; aria-label is
+            // not permitted on a role-less span.
+            role="img"
+            aria-label={`${progress.completed} of ${progress.total} complete`}
+          >
             {progress.completed}/{progress.total}
           </span>
         )}

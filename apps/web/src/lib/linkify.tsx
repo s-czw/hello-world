@@ -27,7 +27,13 @@ export function linkify(text: string): React.ReactNode {
       if (start > last) out.push(line.slice(last, start));
       const href = url.startsWith("www.") ? `https://${url}` : url;
       out.push(
-        <a key={`a-${key}-${start}`} href={href} target="_blank" rel="noopener noreferrer">
+        <a
+          key={`a-${key}-${start}`}
+          className="autolink"
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           {url}
         </a>,
       );

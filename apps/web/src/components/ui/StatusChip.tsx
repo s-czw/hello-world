@@ -92,8 +92,10 @@ export function StatusChip({
       </button>
     );
   }
+  // role="img": aria-label is prohibited (and unreliably supported) on a bare span,
+  // and the chip is a single labelled badge — the label restates the icon + text.
   return (
-    <span className={classes} style={style} aria-label={aria} title={title}>
+    <span className={classes} style={style} role="img" aria-label={aria} title={title}>
       {inner}
     </span>
   );

@@ -25,6 +25,7 @@ public class SessionService {
     private final JwtService jwt;
     private final AuthSessionRepository sessions;
     private final MembershipService memberships;
+    private final CsrfTokenService csrf;
     private final long refreshTtlSeconds;
     private final boolean cookieSecure;
 
@@ -32,11 +33,13 @@ public class SessionService {
             JwtService jwt,
             AuthSessionRepository sessions,
             MembershipService memberships,
+            CsrfTokenService csrf,
             @Value("${cairn.auth.jwt.refresh-ttl-seconds}") long refreshTtlSeconds,
             @Value("${cairn.auth.cookie.secure}") boolean cookieSecure) {
         this.jwt = jwt;
         this.sessions = sessions;
         this.memberships = memberships;
+        this.csrf = csrf;
         this.refreshTtlSeconds = refreshTtlSeconds;
         this.cookieSecure = cookieSecure;
     }
@@ -54,9 +57,11 @@ public class SessionService {
         sessions.create(
                 userId, Tokens.sha256Hex(refreshPlain), OffsetDateTime.now().plusSeconds(refreshTtlSeconds));
 
+        // A fresh double-submit token accompanies every session issue/rotation (arch §6.4).
         List<ResponseCookie> cookies = List.of(
                 AuthCookies.access(accessJwt, jwt.accessTtlSeconds(), cookieSecure),
-                AuthCookies.refresh(refreshPlain, refreshTtlSeconds, cookieSecure));
+                AuthCookies.refresh(refreshPlain, refreshTtlSeconds, cookieSecure),
+                csrf.issueCookie());
         return new SessionOutcome(cookies, account);
     }
 
@@ -84,6 +89,9 @@ public class SessionService {
 
     /** Cookies that clear the session client-side (logout). */
     public List<ResponseCookie> clearingCookies() {
-        return List.of(AuthCookies.clearAccess(cookieSecure), AuthCookies.clearRefresh(cookieSecure));
+        return List.of(
+                AuthCookies.clearAccess(cookieSecure),
+                AuthCookies.clearRefresh(cookieSecure),
+                csrf.clearingCookie());
     }
 }

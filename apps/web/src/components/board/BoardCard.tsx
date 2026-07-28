@@ -27,14 +27,14 @@ export function BoardCard({
 }: BoardCardProps) {
   const id = task.id ?? "";
   const sortable = useSortable({ id, disabled: overlay });
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = sortable;
+  // `attributes` is deliberately NOT spread onto the card: it stamps role="button"
+  // + tabIndex + aria-roledescription on a container that holds its own buttons
+  // (complete toggle, task name), which axe flags as `nested-interactive` (WCAG
+  // 4.1.2). The board uses the PointerSensor only, so dnd-kit's keyboard
+  // attributes buy nothing; keyboard users reach the card through its name button
+  // and move cards with the list view's "Move to…" menu (WCAG 2.5.7 drag
+  // alternative).
+  const { listeners, setNodeRef, transform, transition, isDragging } = sortable;
 
   const style = overlay
     ? undefined
@@ -48,27 +48,16 @@ export function BoardCard({
   const overdue = !task.completed && isOverdue(task.dueDate);
   const hasPriority = priorityDef(task.priority).value !== "none";
 
+  // Activation sits on the card so a click anywhere opens the peek; the name
+  // button below is the focusable, screen-reader-visible control and bubbles its
+  // click (and Enter/Space) up into that same handler.
   return (
     <div
       ref={overlay ? undefined : setNodeRef}
       style={style}
       className={`${styles.card} ${overlay ? styles.cardDragging : ""}`}
-      {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
       onClick={overlay ? undefined : () => onOpenPeek(id)}
-      role={overlay ? undefined : "button"}
-      tabIndex={overlay ? undefined : 0}
-      aria-label={overlay ? undefined : `Open ${task.title}`}
-      onKeyDown={
-        overlay
-          ? undefined
-          : (e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                onOpenPeek(id);
-              }
-            }
-      }
     >
       <div className={styles.cardTop}>
         <span
@@ -83,7 +72,13 @@ export function BoardCard({
             size={16}
           />
         </span>
-        <span className={styles.cardName}>{task.title}</span>
+        {overlay ? (
+          <span className={styles.cardName}>{task.title}</span>
+        ) : (
+          <button type="button" className={styles.cardName} aria-label={`Open ${task.title}`}>
+            {task.title}
+          </button>
+        )}
       </div>
 
       {(task.dueDate || hasPriority || assignee) && (

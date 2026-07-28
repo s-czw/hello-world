@@ -113,6 +113,10 @@ export function ScheduleView({ portfolioId }: { portfolioId: string }) {
                 <div className={styles.schedTrack}>
                   <div
                     className={styles.schedBar}
+                    /* role="img" — a bare <div> may not carry aria-label
+                       (axe `aria-prohibited-attr`), and the bar *is* a graphic
+                       whose only accessible content is its date range. */
+                    role="img"
                     style={{ left: `${left}%`, width: `${width}%`, background: color }}
                     title={`${format(isoToLocalDate(p.startDate!), "MMM d, yyyy")} → ${format(isoToLocalDate(p.endDate!), "MMM d, yyyy")}`}
                     aria-label={`${p.name}: ${format(isoToLocalDate(p.startDate!), "MMM d, yyyy")} to ${format(isoToLocalDate(p.endDate!), "MMM d, yyyy")}`}

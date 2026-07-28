@@ -71,7 +71,10 @@ export function RollupTable({
               <th>Owner</th>
               <th>Dates</th>
               <th>Progress</th>
-              <th aria-label="Actions" />
+              {/* A header needs text a screen reader can read, not just aria-label. */}
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>

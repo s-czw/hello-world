@@ -117,10 +117,12 @@ jobs:
             || { echo "::error::openapi.json / api-client is stale — run 'pnpm gen:client' (after regenerating the spec) and commit."; exit 1; }
 
   # ---------------------------------------------------------------------------
-  # (d) Licenses — D-021 gate for both ecosystems
+  # (d) Supply chain — D-021 license gate for both ecosystems + the dependency audit
+  #     CLAUDE.md's Definition of Done lists `pnpm audit` as part of a green CI; it lives
+  #     here because this job already has the full workspace installed.
   # ---------------------------------------------------------------------------
   licenses:
-    name: licenses (node + java)
+    name: licenses + audit (node + java)
     runs-on: ubuntu-latest
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
@@ -145,12 +147,24 @@ jobs:
         run: node scripts/check-licenses-node.mjs
       - name: Java license gate
         run: bash scripts/check-licenses-java.sh
+      # Fails the build on a high or critical advisory anywhere in the workspace tree.
+      # Threshold (not zero-tolerance) on purpose: `low`/`moderate` findings are almost always
+      # in dev-only tooling — today the single open one is esbuild (via tsup, a build-time dep
+      # that never ships). Raise the bar to `moderate` once that is clean.
+      - name: Dependency audit (fails on high/critical)
+        run: pnpm audit --audit-level=high
+      # Advisory: the full list, including the low/moderate findings the gate above tolerates.
+      - name: Dependency audit — full report (advisory)
+        if: always()
+        run: pnpm audit || true
 
   # ---------------------------------------------------------------------------
-  # (e) Smoke — full stack E2E (Postgres service, api jar + web, Playwright)
+  # (e) Smoke + a11y — full stack E2E (Postgres service, api jar + web, Playwright)
+  #     `playwright test` runs both projects: `smoke` (functional happy path) and
+  #     `a11y` (axe scan of every authenticated surface; fails on serious/critical).
   # ---------------------------------------------------------------------------
   smoke:
-    name: smoke (playwright E2E)
+    name: smoke + a11y (playwright E2E)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -192,7 +206,7 @@ jobs:
         run: pnpm -r build
       - name: Install Playwright chromium
         run: pnpm --filter web exec playwright install --with-deps chromium
-      - name: Run E2E smoke
+      - name: Run E2E smoke + axe a11y scan
         env:
           DB_URL: jdbc:postgresql://127.0.0.1:5432/cairn
           DATABASE_URL: postgres://cairn:cairn@127.0.0.1:5432/cairn
@@ -207,3 +221,36 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report
           retention-days: 7
+      # The axe run always writes its full violation list (incl. the moderate/minor
+      # findings that do not fail the gate) — keep it whether or not the job passed.
+      - name: Upload axe a11y report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-report
+          path: apps/web/test-results/a11y-report.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # (f) Deploy stack — static validation of the compose files (M4 item D)
+  #     Images are NOT built here (that needs a registry pull and several minutes);
+  #     `config -q` catches schema errors, bad interpolation and broken depends_on,
+  #     which is what actually rots when the app changes.
+  # ---------------------------------------------------------------------------
+  deploy-config:
+    name: deploy-config (compose validation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the dev compose file
+        run: docker compose -f docker-compose.yml config -q
+      - name: Validate the production compose file
+        run: docker compose -f docker-compose.prod.yml --env-file .env.prod.example config -q
+      - name: Fail if a required variable stopped being required
+        run: |
+          if docker compose -f docker-compose.prod.yml --env-file /dev/null config -q 2>/dev/null; then
+            echo "::error::docker-compose.prod.yml resolved with no environment — the \${VAR:?} guards on the required secrets are gone."
+            exit 1
+          fi
+          echo "required-variable guards are intact"
